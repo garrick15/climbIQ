@@ -149,6 +149,71 @@ function json(body: unknown, status = 200): Response {
   })
 }
 
+/**
+ * Parse the model's text output into JSON — robustly, and WITHOUT ever
+ * throwing (a throw here would crash the function and surface as a 502).
+ *
+ * Handles: code fences, prose around the JSON, and TRUNCATED output (the
+ * common failure when the response hits the token limit mid-array) by
+ * balancing any unclosed strings/brackets before a final parse attempt.
+ */
+function parseModelJson(raw: string): unknown | null {
+  if (!raw) return null
+  // Strip ```json … ``` fences if present.
+  let text = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '')
+
+  const tryParse = (s: string): unknown | null => {
+    try {
+      return JSON.parse(s)
+    } catch {
+      return null
+    }
+  }
+
+  // 1) Straight parse.
+  let out = tryParse(text)
+  if (out) return out
+
+  // 2) Slice to the outermost object braces.
+  const start = text.indexOf('{')
+  const end = text.lastIndexOf('}')
+  if (start >= 0 && end > start) {
+    out = tryParse(text.slice(start, end + 1))
+    if (out) return out
+  }
+
+  // 3) Repair truncated JSON: from the first '{', walk the string tracking
+  //    nesting + string state, then append the missing closers.
+  if (start >= 0) {
+    const body = text.slice(start)
+    const stack: string[] = []
+    let inStr = false
+    let escaped = false
+    let repaired = ''
+    for (const ch of body) {
+      repaired += ch
+      if (inStr) {
+        if (escaped) escaped = false
+        else if (ch === '\\') escaped = true
+        else if (ch === '"') inStr = false
+        continue
+      }
+      if (ch === '"') inStr = true
+      else if (ch === '{') stack.push('}')
+      else if (ch === '[') stack.push(']')
+      else if (ch === '}' || ch === ']') stack.pop()
+    }
+    if (inStr) repaired += '"'
+    // Drop a dangling trailing comma before closing.
+    repaired = repaired.replace(/,\s*$/, '')
+    while (stack.length) repaired += stack.pop()
+    out = tryParse(repaired)
+    if (out) return out
+  }
+
+  return null
+}
+
 export default async function handler(req: Request, _context: Context): Promise<Response> {
   if (req.method !== 'POST') {
     return json({ error: 'method_not_allowed', message: 'Use POST.' }, 405)
@@ -221,7 +286,9 @@ export default async function handler(req: Request, _context: Context): Promise<
       { role: 'user', content },
     ],
     temperature: 0.4,
-    max_tokens: 4000,
+    // Large: the full analysis (beta + feedback + training) is long; too small
+    // truncates the JSON mid-array and crashes parsing.
+    max_tokens: 8000,
     ...(useSchema
       ? {
           response_format: {
@@ -273,13 +340,17 @@ export default async function handler(req: Request, _context: Context): Promise<
     return json({ error: 'empty_response', message: 'The model returned no content.' }, 502)
   }
 
-  let analysis: unknown
-  try {
-    analysis = JSON.parse(raw)
-  } catch {
-    const match = raw.match(/\{[\s\S]*\}/)
-    if (!match) return json({ error: 'unparseable_response', detail: raw.slice(0, 2000) }, 502)
-    analysis = JSON.parse(match[0])
+  const analysis = parseModelJson(raw)
+  if (!analysis) {
+    // Never throw here — return a clean error so the function can't 502.
+    return json(
+      {
+        error: 'unparseable_response',
+        message: 'The model output was not valid JSON (often truncated output).',
+        detail: raw.slice(0, 1500),
+      },
+      502,
+    )
   }
 
   return json({ analysis })

@@ -141,6 +141,57 @@ const RESPONSE_SCHEMA = {
   },
 } as const
 
+/**
+ * Parse model text output to JSON robustly, without throwing. Handles code
+ * fences, surrounding prose, and TRUNCATED output (balances unclosed
+ * strings/brackets) — truncation is the common cause of the parse crash.
+ */
+function parseModelJson(raw: string): unknown | null {
+  if (!raw) return null
+  const text = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '')
+  const tryParse = (s: string): unknown | null => {
+    try {
+      return JSON.parse(s)
+    } catch {
+      return null
+    }
+  }
+  let out = tryParse(text)
+  if (out) return out
+  const start = text.indexOf('{')
+  const end = text.lastIndexOf('}')
+  if (start >= 0 && end > start) {
+    out = tryParse(text.slice(start, end + 1))
+    if (out) return out
+  }
+  if (start >= 0) {
+    const body = text.slice(start)
+    const stack: string[] = []
+    let inStr = false
+    let escaped = false
+    let repaired = ''
+    for (const ch of body) {
+      repaired += ch
+      if (inStr) {
+        if (escaped) escaped = false
+        else if (ch === '\\') escaped = true
+        else if (ch === '"') inStr = false
+        continue
+      }
+      if (ch === '"') inStr = true
+      else if (ch === '{') stack.push('}')
+      else if (ch === '[') stack.push(']')
+      else if (ch === '}' || ch === ']') stack.pop()
+    }
+    if (inStr) repaired += '"'
+    repaired = repaired.replace(/,\s*$/, '')
+    while (stack.length) repaired += stack.pop()
+    out = tryParse(repaired)
+    if (out) return out
+  }
+  return null
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'method_not_allowed', message: 'Use POST.' })
@@ -205,7 +256,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       { role: 'user', content },
     ],
     temperature: 0.4,
-    max_tokens: 4000,
+    // Large: the full analysis is long; too small truncates the JSON.
+    max_tokens: 8000,
     ...(useSchema
       ? {
           response_format: {
@@ -255,17 +307,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     return
   }
 
-  // The model is asked to return pure JSON; parse defensively.
-  let analysis: unknown
-  try {
-    analysis = JSON.parse(raw)
-  } catch {
-    const match = raw.match(/\{[\s\S]*\}/)
-    if (!match) {
-      res.status(502).json({ error: 'unparseable_response', detail: raw.slice(0, 2000) })
-      return
-    }
-    analysis = JSON.parse(match[0])
+  const analysis = parseModelJson(raw)
+  if (!analysis) {
+    // Never throw — return a clean error so the function can't 502.
+    res.status(502).json({
+      error: 'unparseable_response',
+      message: 'The model output was not valid JSON (often truncated output).',
+      detail: raw.slice(0, 1500),
+    })
+    return
   }
 
   res.status(200).json({ analysis })
