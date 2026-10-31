@@ -1,19 +1,44 @@
-import { Film, Pause, Play } from 'lucide-react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { Film, PersonStanding, Pause, Play } from 'lucide-react'
 import type { Analysis } from '../types'
 import { SPEEDS } from '../lib/usePlayer'
 import type { Player } from '../lib/usePlayer'
+import type { PoseTrack } from '../lib/pose-estimation'
 import { formatTime } from '../lib/video'
+import { SkeletonOverlay } from './SkeletonOverlay'
 import { Card, cx } from './ui'
 
 interface Props {
   analysis: Analysis
   player: Player
   fileName?: string
+  poseTrack?: PoseTrack
 }
 
-export function VideoPanel({ analysis, player, fileName }: Props) {
+export function VideoPanel({ analysis, player, fileName, poseTrack }: Props) {
   const { time, duration, playing, speed, src } = player
   const pct = duration > 0 ? (time / duration) * 100 : 0
+
+  const stageRef = useRef<HTMLDivElement>(null)
+  const [box, setBox] = useState({ width: 0, height: 0 })
+  const [showSkeleton, setShowSkeleton] = useState(true)
+
+  // Measure the video stage so the overlay letterboxes correctly.
+  useLayoutEffect(() => {
+    const el = stageRef.current
+    if (!el) return
+    const update = () => setBox({ width: el.clientWidth, height: el.clientHeight })
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+  useEffect(() => {
+    const el = stageRef.current
+    if (el) setBox({ width: el.clientWidth, height: el.clientHeight })
+  }, [src])
+
+  const hasPose = !!poseTrack && poseTrack.frames.some((f) => f.landmarks)
 
   let stepIdx = -1
   analysis.beta.forEach((s, i) => {
@@ -23,7 +48,7 @@ export function VideoPanel({ analysis, player, fileName }: Props) {
 
   return (
     <Card className="overflow-hidden">
-      <div className="relative aspect-[3/4] bg-black">
+      <div ref={stageRef} className="relative aspect-[3/4] bg-black">
         {src ? (
           <video
             ref={player.videoRef}
@@ -47,12 +72,35 @@ export function VideoPanel({ analysis, player, fileName }: Props) {
           </div>
         )}
 
+        {/* Real detected pose, drawn over the video and synced to playback. */}
+        {src && hasPose && showSkeleton && poseTrack && (
+          <SkeletonOverlay track={poseTrack} time={time} box={box} />
+        )}
+
         {currentStep && (
           <div className="pointer-events-none absolute left-3 top-3 max-w-[85%] truncate rounded-lg border border-white/10 bg-ink-950/75 px-2.5 py-1.5 text-[11px] text-slate-200 backdrop-blur">
             <span className="font-mono text-accent-300">Move {stepIdx + 1}</span>
             <span className="mx-1.5 text-slate-600">·</span>
             {currentStep.title}
           </div>
+        )}
+
+        {src && hasPose && (
+          <button
+            type="button"
+            onClick={() => setShowSkeleton((s) => !s)}
+            aria-pressed={showSkeleton}
+            title={showSkeleton ? 'Hide pose skeleton' : 'Show pose skeleton'}
+            className={cx(
+              'absolute right-3 top-3 inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-medium backdrop-blur transition-colors',
+              showSkeleton
+                ? 'border-accent-400/50 bg-accent-500/25 text-accent-100'
+                : 'border-white/10 bg-ink-950/70 text-slate-300 hover:text-white',
+            )}
+          >
+            <PersonStanding className="h-3.5 w-3.5" aria-hidden />
+            Pose
+          </button>
         )}
 
         {!playing && (

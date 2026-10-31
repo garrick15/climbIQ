@@ -1,14 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { Check, Loader2, X } from 'lucide-react'
 import { PIPELINE, analyseClimb } from '../lib/analyse'
-import type { Analysis } from '../types'
+import type { AnalyseResult } from '../lib/analyse'
 import { Card, Eyebrow, cx } from './ui'
 
 interface Props {
   file?: File
   videoUrl?: string
   durationSec?: number
-  onDone: (a: Analysis) => void
+  onDone: (r: AnalyseResult) => void
   onCancel: () => void
 }
 
@@ -29,7 +29,7 @@ export function ProcessingView({ file, videoUrl, durationSec, onDone, onCancel }
         setFraction(p.fraction)
       },
     })
-      .then((a) => doneRef.current(a))
+      .then((r) => doneRef.current(r))
       .catch((e: unknown) => {
         if (!(e instanceof DOMException && e.name === 'AbortError')) throw e
       })
@@ -44,7 +44,8 @@ export function ProcessingView({ file, videoUrl, durationSec, onDone, onCancel }
         <Eyebrow>Analysing</Eyebrow>
         <h1 className="mt-3 text-4xl font-semibold tracking-tight text-white">Watching your climb</h1>
         <p className="mt-3 max-w-md text-[15px] leading-relaxed text-slate-400">
-          This only takes a moment. We are tracking your body, finding the holds and breaking the climb into moves.
+          Tracking your body with MediaPipe, measuring how you move, then asking Muse Spark to coach you. This runs in
+          your browser and can take a moment on longer clips.
         </p>
 
         <div className="mt-8 flex items-center gap-4">
