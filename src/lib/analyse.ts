@@ -146,13 +146,24 @@ export async function analyseClimb(opts: {
     })
 
     if (!res.ok) {
-      const err = (await res.json().catch(() => ({}))) as { error?: string; message?: string }
+      const err = (await res.json().catch(() => ({}))) as {
+        error?: string
+        message?: string
+        status?: number
+        detail?: string
+      }
+      // Log the full upstream detail so we can see exactly why Muse Spark failed.
+      console.error('[ClimbIQ] /api/coach not OK:', res.status, err)
       if (err.error === 'missing_api_key') {
         return fallback(
           'No Meta API key is configured yet, so this is sample coaching. Add META_API_KEY to enable real analysis.',
         )
       }
-      return fallback(err.message || `Coaching service returned ${res.status}. Showing sample data.`)
+      const detail = err.detail ? ` Detail: ${String(err.detail).slice(0, 300)}` : ''
+      const upstream = err.status ? ` (Meta API status ${err.status})` : ''
+      return fallback(
+        `${err.message || `Coaching service returned ${res.status}`}${upstream}.${detail} Showing sample data — see console.`,
+      )
     }
 
     // Parse the coaching payload defensively: a non-OK body or an HTML error

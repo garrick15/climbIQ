@@ -193,30 +193,45 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     content.push({ type: 'image_url', image_url: { url: dataUrl } })
   }
 
-  const body = {
+  const buildBody = (useSchema: boolean) => ({
     model,
     messages: [
-      { role: 'system', content: SYSTEM_PROMPT },
+      {
+        role: 'system',
+        content: useSchema
+          ? SYSTEM_PROMPT
+          : `${SYSTEM_PROMPT}\n\nOutput ONLY a single JSON object with keys: climb, metrics, beta, feedback, training. No markdown, no code fences, no prose.`,
+      },
       { role: 'user', content },
     ],
     temperature: 0.4,
     max_tokens: 4000,
-    response_format: {
-      type: 'json_schema',
-      json_schema: { name: 'climb_analysis', strict: true, schema: RESPONSE_SCHEMA },
-    },
-  }
+    ...(useSchema
+      ? {
+          response_format: {
+            type: 'json_schema',
+            json_schema: { name: 'climb_analysis', strict: true, schema: RESPONSE_SCHEMA },
+          },
+        }
+      : {}),
+  })
+
+  const callUpstream = (useSchema: boolean) =>
+    fetch(`${baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify(buildBody(useSchema)),
+    })
 
   let upstream: Response
+  let firstErrorDetail = ''
   try {
-    upstream = await fetch(`${baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify(body),
-    })
+    upstream = await callUpstream(true)
+    if (!upstream.ok) {
+      firstErrorDetail = (await upstream.text().catch(() => '')).slice(0, 2000)
+      console.warn('[coach] schema request failed, retrying without response_format:', upstream.status)
+      upstream = await callUpstream(false)
+    }
   } catch (e) {
     res.status(502).json({ error: 'upstream_unreachable', message: String(e) })
     return
@@ -224,7 +239,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
 
   if (!upstream.ok) {
     const text = await upstream.text().catch(() => '')
-    res.status(502).json({ error: 'upstream_error', status: upstream.status, detail: text.slice(0, 2000) })
+    res.status(502).json({
+      error: 'upstream_error',
+      status: upstream.status,
+      detail: (text || firstErrorDetail).slice(0, 2000),
+      firstAttempt: firstErrorDetail ? firstErrorDetail.slice(0, 500) : undefined,
+    })
     return
   }
 
