@@ -1,0 +1,250 @@
+/**
+ * ClimbIQ — coaching serverless function (Netlify).
+ *
+ * This is the ONLY place the Meta Model API key is used. The browser posts
+ * pose-derived observations (and optionally a few sampled frames) here; this
+ * function forwards them to Muse Spark with the key attached server-side, then
+ * returns structured coaching JSON. The frontend never sees the key.
+ *
+ * Modern Netlify function: a default export that receives a Web `Request` and
+ * returns a Web `Response`. `netlify.toml` maps /api/coach → this function.
+ */
+
+import type { Config, Context } from '@netlify/functions'
+
+interface CoachRequest {
+  /** Measurable, pose-derived facts produced in the browser by MediaPipe. */
+  observations: unknown
+  /** Optional base64 data URLs of a few sampled frames for visual grounding. */
+  frames?: string[]
+  /** Clip length in seconds, so timestamps land inside the video. */
+  durationSec?: number
+}
+
+const SYSTEM_PROMPT = `You are ClimbIQ, an expert bouldering coach analysing a single recorded attempt.
+
+You receive MEASURED, pose-derived observations extracted in the browser with MediaPipe
+(joint angles, limb trajectories, an approximate 2D centre-of-mass path, detected pauses,
+and move segmentation) and optionally a few sampled video frames.
+
+Your job is to interpret those measurements and produce coaching. Follow these rules:
+- Ground every claim in the supplied observations or visible frames. Do not invent holds,
+  colours, or grades that are not supported by the data.
+- Treat the centre of mass as an APPROXIMATE 2D estimate.
+- Present beta as SUGGESTED movement, never as guaranteed instructions.
+- Tie feedback to the timestamps present in the observations.
+- Be specific, encouraging and concrete. Prefer one clear cue per point.
+- Produce one beta step per detected move, 2-4 feedback items, and 2-3 training focuses.
+
+Return ONLY valid JSON matching the provided schema. No prose outside the JSON.`
+
+// JSON schema the model must fill. Mirrors the `Analysis` shape the UI renders.
+const RESPONSE_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['climb', 'metrics', 'beta', 'feedback', 'training'],
+  properties: {
+    climb: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['outcome', 'durationSec', 'moves', 'holdsDetected'],
+      properties: {
+        outcome: { type: 'string' },
+        durationSec: { type: 'number' },
+        moves: { type: 'integer' },
+        holdsDetected: { type: 'integer' },
+      },
+    },
+    metrics: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['id', 'label', 'value', 'note'],
+        properties: {
+          id: { type: 'string' },
+          label: { type: 'string' },
+          value: { type: 'number' },
+          note: { type: 'string' },
+        },
+      },
+    },
+    beta: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['id', 'title', 'summary', 'bodyPosition', 'why', 'yourAttempt', 'timestamp'],
+        properties: {
+          id: { type: 'string' },
+          title: { type: 'string' },
+          summary: { type: 'string' },
+          bodyPosition: { type: 'string' },
+          why: { type: 'string' },
+          yourAttempt: { type: 'string' },
+          timestamp: { type: 'number' },
+          crux: { type: 'boolean' },
+        },
+      },
+    },
+    feedback: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['id', 'kind', 'timestamp', 'title', 'observation', 'why', 'skill'],
+        properties: {
+          id: { type: 'string' },
+          kind: { type: 'string', enum: ['strength', 'improve'] },
+          timestamp: { type: 'number' },
+          title: { type: 'string' },
+          observation: { type: 'string' },
+          why: { type: 'string' },
+          tryThis: { type: 'string' },
+          skill: { type: 'string' },
+        },
+      },
+    },
+    training: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['id', 'rank', 'skill', 'headline', 'reason', 'impact', 'impactScore', 'cue', 'cadence', 'drills'],
+        properties: {
+          id: { type: 'string' },
+          rank: { type: 'integer' },
+          skill: { type: 'string' },
+          headline: { type: 'string' },
+          reason: { type: 'string' },
+          impact: { type: 'string', enum: ['High', 'Medium'] },
+          impactScore: { type: 'number' },
+          cue: { type: 'string' },
+          cadence: { type: 'string' },
+          drills: {
+            type: 'array',
+            items: {
+              type: 'object',
+              additionalProperties: false,
+              required: ['name', 'prescription', 'detail'],
+              properties: {
+                name: { type: 'string' },
+                prescription: { type: 'string' },
+                detail: { type: 'string' },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+} as const
+
+function json(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'content-type': 'application/json' },
+  })
+}
+
+export default async function handler(req: Request, _context: Context): Promise<Response> {
+  if (req.method !== 'POST') {
+    return json({ error: 'method_not_allowed', message: 'Use POST.' }, 405)
+  }
+
+  const apiKey = process.env.META_API_KEY
+  if (!apiKey) {
+    return json(
+      {
+        error: 'missing_api_key',
+        message:
+          'META_API_KEY is not set. On Netlify, add it under Site settings → ' +
+          'Environment variables, then redeploy. Locally, copy .env.example to ' +
+          '.env.local and paste your Meta Model API key.',
+      },
+      501,
+    )
+  }
+
+  let payload: CoachRequest
+  try {
+    payload = (await req.json()) as CoachRequest
+  } catch {
+    return json({ error: 'invalid_json', message: 'Request body must be JSON.' }, 400)
+  }
+  if (!payload || typeof payload !== 'object' || !('observations' in payload)) {
+    return json({ error: 'invalid_body', message: 'Expected JSON with an "observations" field.' }, 400)
+  }
+
+  const baseUrl = process.env.META_API_BASE_URL ?? 'https://api.meta.ai/v1'
+  const model = process.env.META_MODEL ?? 'muse-spark-1.3'
+
+  // Build the multimodal user message: observations as text + optional frames.
+  const content: Array<Record<string, unknown>> = [
+    {
+      type: 'text',
+      text:
+        `Clip length: ${payload.durationSec ?? 'unknown'} seconds.\n\n` +
+        `Pose-derived observations (measured in-browser by MediaPipe):\n` +
+        '```json\n' +
+        JSON.stringify(payload.observations, null, 2) +
+        '\n```\n\n' +
+        'Produce the coaching JSON for this attempt.',
+    },
+  ]
+  for (const dataUrl of (payload.frames ?? []).slice(0, 6)) {
+    content.push({ type: 'image_url', image_url: { url: dataUrl } })
+  }
+
+  const body = {
+    model,
+    messages: [
+      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'user', content },
+    ],
+    temperature: 0.4,
+    max_tokens: 4000,
+    response_format: {
+      type: 'json_schema',
+      json_schema: { name: 'climb_analysis', strict: true, schema: RESPONSE_SCHEMA },
+    },
+  }
+
+  let upstream: Response
+  try {
+    upstream = await fetch(`${baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify(body),
+    })
+  } catch (e) {
+    return json({ error: 'upstream_unreachable', message: String(e) }, 502)
+  }
+
+  if (!upstream.ok) {
+    const text = await upstream.text().catch(() => '')
+    return json({ error: 'upstream_error', status: upstream.status, detail: text.slice(0, 2000) }, 502)
+  }
+
+  const data = (await upstream.json()) as { choices?: { message?: { content?: string } }[] }
+  const raw = data.choices?.[0]?.message?.content
+  if (!raw) {
+    return json({ error: 'empty_response', message: 'The model returned no content.' }, 502)
+  }
+
+  let analysis: unknown
+  try {
+    analysis = JSON.parse(raw)
+  } catch {
+    const match = raw.match(/\{[\s\S]*\}/)
+    if (!match) return json({ error: 'unparseable_response', detail: raw.slice(0, 2000) }, 502)
+    analysis = JSON.parse(match[0])
+  }
+
+  return json({ analysis })
+}
+
+// Route this function at /api/coach so the frontend's fetch('/api/coach') works.
+export const config: Config = {
+  path: '/api/coach',
+}

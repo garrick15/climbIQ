@@ -41,8 +41,8 @@ npm install
 
 ### Add your Meta Model API key  ← this is the only place the key goes
 
-The key is used **only** by the serverless function in `api/coach.ts`. It is
-never bundled into the frontend.
+The key is used **only** by the serverless function (`netlify/functions/coach.ts`
+on Netlify, `api/coach.ts` on Vercel). It is never bundled into the frontend.
 
 1. Copy the example env file:
 
@@ -62,28 +62,44 @@ never bundled into the frontend.
 
 ### Run locally
 
-The coaching endpoint is a Vercel serverless function, so run the app with the
-Vercel CLI (it serves both the Vite frontend and `/api/coach`):
+The coaching endpoint is a serverless function, so run the app with the Netlify
+CLI (it serves both the Vite frontend and `/api/coach`, and reads `.env.local`):
 
 ```bash
-npm i -g vercel      # once
-vercel dev
+npm i -g netlify-cli   # once
+netlify dev
 ```
 
 > Plain `npm run dev` runs the frontend only. Uploads will still track pose and
 > show the skeleton, but `/api/coach` won't exist, so you'll get the labelled
-> "no API key / service unavailable" sample output. Use `vercel dev` for the
-> full pipeline, or just click **Try a sample climb**.
+> "no API key" sample output. Use `netlify dev` for the full pipeline, or just
+> click **Try a sample climb**.
 
-### Deploy to Vercel
+### Deploy to Netlify  (primary target)
 
-1. Push this repo and import it in Vercel (framework preset: **Vite**).
+The repo ships a `netlify.toml` and a function at `netlify/functions/coach.ts`
+routed to `/api/coach`.
+
+1. Connect the repo in Netlify. Build settings are picked up from `netlify.toml`
+   (build `npm run build`, publish `dist`, functions `netlify/functions`).
 2. Add the environment variable under
-   **Project → Settings → Environment Variables**:
+   **Site settings → Environment variables**:
    - `META_API_KEY` = your key
    - *(optional)* `META_MODEL` (default `muse-spark-1.3`)
    - *(optional)* `META_API_BASE_URL` (default `https://api.meta.ai/v1`)
-3. Deploy.
+3. Redeploy so the function picks up the variable.
+
+> **PR previews:** Netlify builds a Deploy Preview per PR. The function runs
+> there too, but only if `META_API_KEY` is set for the **Deploy previews** scope
+> (Site settings → Environment variables → set the variable's scope to include
+> "Deploy Previews", or "All"). Without it the preview falls back to labelled
+> sample data — which is the honest, expected behaviour.
+
+### Deploy to Vercel  (also supported)
+
+`vercel.json` + `api/coach.ts` are kept so Vercel works too: import the repo
+(preset **Vite**), add `META_API_KEY` under Project → Settings → Environment
+Variables, and deploy. Local full-stack dev on Vercel: `vercel dev`.
 
 ## Tech stack
 
