@@ -3,6 +3,7 @@ import { Clock, Info, Mountain, MessageSquareText, Route, Target, Trophy } from 
 import type { Analysis } from '../types'
 import { usePlayer } from '../lib/usePlayer'
 import { formatTime } from '../lib/video'
+import type { PoseTrack } from '../lib/pose-estimation'
 import { FeedbackPanel } from './FeedbackPanel'
 import { TrainingPanel } from './TrainingPanel'
 import { VideoPanel } from './VideoPanel'
@@ -15,9 +16,11 @@ interface Props {
   analysis: Analysis
   videoUrl?: string
   fileName?: string
+  fallbackReason?: string | null
+  poseTrack?: PoseTrack
 }
 
-export function ResultsView({ analysis, videoUrl, fileName }: Props) {
+export function ResultsView({ analysis, videoUrl, fileName, fallbackReason, poseTrack }: Props) {
   const player = usePlayer(videoUrl, analysis.climb.durationSec)
   const [tab, setTab] = useState<Tab>('beta')
   const [stepIndex, setStepIndex] = useState(0)
@@ -39,13 +42,36 @@ export function ResultsView({ analysis, videoUrl, fileName }: Props) {
 
   return (
     <div className="animate-fade-up">
-      <div className="mb-5 flex items-start gap-3 rounded-xl border border-accent-500/25 bg-accent-500/[0.07] px-4 py-3 text-[13px] leading-relaxed text-slate-300">
-        <Info className="mt-0.5 h-4 w-4 shrink-0 text-accent-300" aria-hidden />
-        <p>
-          <span className="font-medium text-accent-200">Interface preview.</span> Everything below is sample data. The
-          computer-vision pipeline is not connected yet, so these results do not describe the video you uploaded.
-        </p>
-      </div>
+      {analysis.source === 'ai' ? (
+        <div className="mb-5 flex items-start gap-3 rounded-xl border border-good/25 bg-good/[0.07] px-4 py-3 text-[13px] leading-relaxed text-slate-300">
+          <Info className="mt-0.5 h-4 w-4 shrink-0 text-good" aria-hidden />
+          <p>
+            <span className="font-medium text-good">Live analysis of your climb.</span> Body pose was tracked with
+            MediaPipe
+            {analysis.provenance ? ` (detected in ${Math.round(analysis.provenance.poseDetectionRate * 100)}% of sampled frames)` : ''}
+            ; the coaching is Muse Spark interpreting that movement.{' '}
+            {analysis.provenance?.holdsDetected ? (
+              <>
+                Holds were detected with SAM&nbsp;3.1 (<em>approximate</em>). Beta is a <em>suggested</em> sequence.
+              </>
+            ) : (
+              <>
+                Beta is a <em>suggested</em> sequence and target holds are approximate — automatic hold detection found
+                too few holds on this clip, so targets are placed from your hand positions.
+              </>
+            )}
+          </p>
+        </div>
+      ) : (
+        <div className="mb-5 flex items-start gap-3 rounded-xl border border-warn/30 bg-warn/[0.08] px-4 py-3 text-[13px] leading-relaxed text-slate-300">
+          <Info className="mt-0.5 h-4 w-4 shrink-0 text-warn" aria-hidden />
+          <p>
+            <span className="font-medium text-warn">Sample data.</span>{' '}
+            {fallbackReason ??
+              'This is a labelled demo climb — not an analysis of a real upload. Upload a video with an API key configured to see live results.'}
+          </p>
+        </div>
+      )}
 
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="min-w-0">
@@ -58,7 +84,15 @@ export function ResultsView({ analysis, videoUrl, fileName }: Props) {
               { icon: Trophy, text: analysis.climb.outcome },
               { icon: Clock, text: formatTime(analysis.climb.durationSec) },
               { icon: Route, text: `${analysis.climb.moves} moves` },
-              { icon: Mountain, text: `${analysis.climb.holdsDetected} holds detected` },
+              {
+                icon: Mountain,
+                text:
+                  analysis.source === 'ai'
+                    ? analysis.provenance?.holdsDetected
+                      ? `${analysis.holds.length} holds detected`
+                      : `${analysis.holds.length} suggested targets`
+                    : `${analysis.climb.holdsDetected} holds detected`,
+              },
             ].map(({ icon: Icon, text }) => (
               <span key={text} className="inline-flex items-center gap-1.5 rounded-full border bg-white/[0.04] px-2.5 py-1">
                 <Icon className="h-3.5 w-3.5 text-accent-300" aria-hidden />
@@ -85,7 +119,7 @@ export function ResultsView({ analysis, videoUrl, fileName }: Props) {
 
       <div className="mt-6 grid items-start gap-6 lg:grid-cols-[minmax(0,380px)_minmax(0,1fr)]">
         <div className="lg:sticky lg:top-20">
-          <VideoPanel analysis={analysis} player={player} fileName={fileName} />
+          <VideoPanel analysis={analysis} player={player} fileName={fileName} poseTrack={poseTrack} />
         </div>
 
         <section aria-label="Coaching output">

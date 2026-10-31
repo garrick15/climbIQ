@@ -360,6 +360,7 @@ export function buildDemoAnalysis(durationSec?: number): Analysis {
   const k = duration / DEMO_DURATION
 
   return {
+    source: 'demo',
     climb: {
       outcome: 'Topped out',
       durationSec: duration,

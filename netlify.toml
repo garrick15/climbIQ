@@ -1,0 +1,26 @@
+# Netlify configuration for ClimbIQ
+#
+# The coaching endpoint is a serverless function in netlify/functions/coach.ts.
+# It reads META_API_KEY server-side (set it in Site settings → Environment
+# variables) and is routed at /api/coach via the function's own config.path.
+
+[build]
+  command = "npm run build"
+  publish = "dist"
+  functions = "netlify/functions"
+
+[functions]
+  # Functions call MediaPipe-free code but fetch an external API; give them room.
+  node_bundler = "esbuild"
+
+[functions."coach"]
+  # The Meta call + model generation can take a while on longer observations.
+  # (Extended timeouts require a paid plan; this is a no-op on the free tier.)
+  timeout = 30
+
+# SPA fallback — serve index.html for client-side routes.
+# This is evaluated AFTER function routes, so /api/coach still hits the function.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

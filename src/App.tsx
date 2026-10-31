@@ -4,6 +4,7 @@ import { ProcessingView } from './components/ProcessingView'
 import { ResultsView } from './components/ResultsView'
 import { UploadView } from './components/UploadView'
 import { readVideoMeta, validateFile } from './lib/video'
+import type { AnalyseResult } from './lib/analyse'
 import type { Analysis, VideoMeta, View } from './types'
 
 export default function App() {
@@ -13,6 +14,8 @@ export default function App() {
   const [meta, setMeta] = useState<VideoMeta | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [analysis, setAnalysis] = useState<Analysis | null>(null)
+  const [poseTrack, setPoseTrack] = useState<AnalyseResult['poseTrack']>(undefined)
+  const [fallbackReason, setFallbackReason] = useState<string | null>(null)
   const urlRef = useRef<string>(undefined)
 
   const releaseUrl = useCallback(() => {
@@ -54,6 +57,8 @@ export default function App() {
   const reset = useCallback(() => {
     clear()
     setAnalysis(null)
+    setPoseTrack(undefined)
+    setFallbackReason(null)
     setView('upload')
     window.scrollTo({ top: 0 })
   }, [clear])
@@ -69,8 +74,10 @@ export default function App() {
     window.scrollTo({ top: 0 })
   }
 
-  const onDone = useCallback((a: Analysis) => {
-    setAnalysis(a)
+  const onDone = useCallback((r: AnalyseResult) => {
+    setAnalysis(r.analysis)
+    setPoseTrack(r.poseTrack)
+    setFallbackReason(r.usedFallback ? (r.fallbackReason ?? null) : null)
     setView('results')
     window.scrollTo({ top: 0 })
   }, [])
@@ -110,12 +117,18 @@ export default function App() {
         )}
 
         {view === 'results' && analysis && (
-          <ResultsView analysis={analysis} videoUrl={videoUrl} fileName={file?.name} />
+          <ResultsView
+            analysis={analysis}
+            videoUrl={videoUrl}
+            fileName={file?.name}
+            fallbackReason={fallbackReason}
+            poseTrack={poseTrack}
+          />
         )}
       </main>
 
       <footer className="border-t py-6 text-center text-xs text-slate-600">
-        ClimbIQ · AI bouldering coach · interface preview
+        ClimbIQ · AI bouldering coach · pose by MediaPipe · coaching by Muse Spark
       </footer>
     </div>
   )

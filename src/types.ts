@@ -83,7 +83,22 @@ export interface Metric {
   note: string
 }
 
+/** Where an analysis came from, so the UI can be honest about it. */
+export type AnalysisSource = 'demo' | 'ai'
+
 export interface Analysis {
+  /**
+   * 'demo'  → clearly-labelled sample data (no real video analysed).
+   * 'ai'    → real MediaPipe pose + Muse Spark coaching for the uploaded clip.
+   */
+  source: AnalysisSource
+  /** present on real analyses: facts the UI can show honestly */
+  provenance?: {
+    poseDetectionRate: number
+    framesSampled: number
+    holdsDetected: boolean
+    notes: string[]
+  }
   climb: {
     outcome: string
     durationSec: number
