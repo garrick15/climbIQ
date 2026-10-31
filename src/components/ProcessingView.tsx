@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { Check, Loader2, X } from 'lucide-react'
 import { PIPELINE, analyseClimb } from '../lib/analyse'
 import type { AnalyseResult } from '../lib/analyse'
+import type { LiveFrame } from '../lib/pose-estimation'
+import { LiveAnalysisView } from './LiveAnalysisView'
 import { Card, Eyebrow, cx } from './ui'
 
 interface Props {
@@ -15,6 +17,7 @@ interface Props {
 export function ProcessingView({ file, videoUrl, durationSec, onDone, onCancel }: Props) {
   const [stage, setStage] = useState(0)
   const [fraction, setFraction] = useState(0)
+  const [liveFrame, setLiveFrame] = useState<LiveFrame | null>(null)
   const doneRef = useRef(onDone)
   doneRef.current = onDone
 
@@ -28,6 +31,7 @@ export function ProcessingView({ file, videoUrl, durationSec, onDone, onCancel }
         setStage(p.stage)
         setFraction(p.fraction)
       },
+      onLiveFrame: (f) => setLiveFrame(f),
     })
       .then((r) => doneRef.current(r))
       .catch((e: unknown) => {
@@ -111,37 +115,40 @@ export function ProcessingView({ file, videoUrl, durationSec, onDone, onCancel }
         </button>
       </div>
 
-      <Card className="relative mx-auto aspect-[3/4] w-full max-w-[340px] overflow-hidden">
-        {videoUrl ? (
-          <video
-            src={`${videoUrl}#t=0.5`}
-            muted
-            playsInline
-            preload="metadata"
-            className="absolute inset-0 h-full w-full object-cover opacity-70"
+      {/* Live analysis viewport: the frame being analysed, with the detected
+          bounding box, skeleton and real-time stats. Falls back to the clip
+          thumbnail before the first frame is processed (e.g. the demo path). */}
+      {file ? (
+        <LiveAnalysisView frame={liveFrame} />
+      ) : (
+        <Card className="relative mx-auto aspect-[3/4] w-full max-w-[360px] overflow-hidden">
+          {videoUrl ? (
+            <video
+              src={`${videoUrl}#t=0.5`}
+              muted
+              playsInline
+              preload="metadata"
+              className="absolute inset-0 h-full w-full object-cover opacity-70"
+              aria-hidden
+            />
+          ) : (
+            <div className="grid-lines absolute inset-0 bg-[radial-gradient(circle_at_50%_40%,#171d31,#0a0d16_70%)]" />
+          )}
+          <div className="absolute inset-0 bg-gradient-to-t from-ink-950/80 via-transparent to-ink-950/40" />
+          {['left-3 top-3 border-l-2 border-t-2', 'right-3 top-3 border-r-2 border-t-2', 'bottom-3 left-3 border-b-2 border-l-2', 'bottom-3 right-3 border-b-2 border-r-2'].map(
+            (c) => (
+              <span key={c} aria-hidden className={cx('absolute h-6 w-6 rounded-[3px] border-accent-400/80', c)} />
+            ),
+          )}
+          <div
             aria-hidden
+            className="absolute inset-x-3 h-px animate-scan bg-gradient-to-r from-transparent via-accent-300 to-transparent shadow-[0_0_18px_4px_rgb(167_139_250/0.55)]"
           />
-        ) : (
-          <div className="grid-lines absolute inset-0 bg-[radial-gradient(circle_at_50%_40%,#171d31,#0a0d16_70%)]" />
-        )}
-        <div className="absolute inset-0 bg-gradient-to-t from-ink-950/80 via-transparent to-ink-950/40" />
-
-        {/* corner brackets */}
-        {['left-3 top-3 border-l-2 border-t-2', 'right-3 top-3 border-r-2 border-t-2', 'bottom-3 left-3 border-b-2 border-l-2', 'bottom-3 right-3 border-b-2 border-r-2'].map(
-          (c) => (
-            <span key={c} aria-hidden className={cx('absolute h-6 w-6 rounded-[3px] border-accent-400/80', c)} />
-          ),
-        )}
-
-        <div
-          aria-hidden
-          className="absolute inset-x-3 h-px animate-scan bg-gradient-to-r from-transparent via-accent-300 to-transparent shadow-[0_0_18px_4px_rgb(167_139_250/0.55)]"
-        />
-
-        <p className="absolute inset-x-0 bottom-5 text-center font-mono text-[11px] uppercase tracking-[0.18em] text-accent-200/80">
-          {PIPELINE[Math.min(stage, PIPELINE.length - 1)].label}
-        </p>
-      </Card>
+          <p className="absolute inset-x-0 bottom-5 text-center font-mono text-[11px] uppercase tracking-[0.18em] text-accent-200/80">
+            {PIPELINE[Math.min(stage, PIPELINE.length - 1)].label}
+          </p>
+        </Card>
+      )}
     </div>
   )
 }

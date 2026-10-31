@@ -5,9 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "prepare-mediapipe": "node scripts/prepare-mediapipe.mjs",
+    "prebuild": "node scripts/prepare-mediapipe.mjs",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "postinstall": "node scripts/prepare-mediapipe.mjs"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "^0.10.22",

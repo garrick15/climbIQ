@@ -1,7 +1,7 @@
 import { buildDemoAnalysis } from '../data/demo'
 import type { Analysis } from '../types'
 import { estimatePose } from './pose-estimation'
-import type { PoseTrack } from './pose-estimation'
+import type { LiveFrame, PoseTrack } from './pose-estimation'
 import { analyseMovement } from './movement'
 import { buildAnalysis } from './build-analysis'
 import type { CoachOutput } from './build-analysis'
@@ -55,8 +55,10 @@ export async function analyseClimb(opts: {
   durationSec?: number
   signal: AbortSignal
   onProgress: (p: Progress) => void
+  /** live per-frame snapshots during pose estimation, for the processing view */
+  onLiveFrame?: (f: LiveFrame) => void
 }): Promise<AnalyseResult> {
-  const { file, signal, onProgress, durationSec } = opts
+  const { file, signal, onProgress, onLiveFrame, durationSec } = opts
 
   // No file → this is the "Try a sample climb" path. Honest demo data.
   if (!file) {
@@ -82,6 +84,7 @@ export async function analyseClimb(opts: {
       onProgress: ({ done, total }) => {
         onProgress({ stage: 1, fraction: total ? done / total : 0 })
       },
+      onFrame: onLiveFrame,
     })
 
     if (signal.aborted) throw new DOMException('Aborted', 'AbortError')

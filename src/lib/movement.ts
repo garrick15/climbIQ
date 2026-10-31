@@ -102,7 +102,7 @@ function angleAt(a: NormalizedLandmark, b: NormalizedLandmark, c: NormalizedLand
   return (Math.acos(cos) * 180) / Math.PI
 }
 
-function frameMetrics(f: PoseFrame): FrameMetrics {
+export function frameMetrics(f: PoseFrame): FrameMetrics {
   if (!f.landmarks) return { t: f.t, com: null, angles: null, hipDeviation: null }
   const p = f.landmarks
 
