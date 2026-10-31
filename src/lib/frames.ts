@@ -4,6 +4,57 @@
  * numeric pose observations. Runs entirely in the browser.
  */
 
+/**
+ * Extract a single frame at a specific time as a JPEG data URL, at a given max
+ * long-edge. Used to grab a clean wall frame for hold detection.
+ */
+export async function extractFrameAt(
+  file: File,
+  t: number,
+  maxEdge: number,
+  signal: AbortSignal,
+): Promise<{ dataUrl: string; width: number; height: number } | null> {
+  const url = URL.createObjectURL(file)
+  const video = document.createElement('video')
+  video.src = url
+  video.muted = true
+  video.playsInline = true
+  video.preload = 'auto'
+
+  const seek = (to: number) =>
+    new Promise<void>((resolve, reject) => {
+      video.addEventListener('seeked', () => resolve(), { once: true })
+      signal.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true })
+      video.currentTime = Math.min(to, video.duration || to)
+    })
+
+  try {
+    await new Promise<void>((resolve, reject) => {
+      video.onloadedmetadata = () => resolve()
+      video.onerror = () => reject(new Error('decode failed'))
+    })
+    const duration = video.duration
+    if (!Number.isFinite(duration) || duration <= 0) return null
+
+    const scale = Math.min(1, maxEdge / Math.max(video.videoWidth, video.videoHeight))
+    const w = Math.round(video.videoWidth * scale)
+    const h = Math.round(video.videoHeight * scale)
+    const canvas = document.createElement('canvas')
+    canvas.width = w
+    canvas.height = h
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return null
+
+    await seek(Math.min(duration - 0.001, Math.max(0, t)))
+    ctx.drawImage(video, 0, 0, w, h)
+    return { dataUrl: canvas.toDataURL('image/jpeg', 0.8), width: w, height: h }
+  } finally {
+    video.removeAttribute('src')
+    video.load()
+    URL.revokeObjectURL(url)
+  }
+}
+
 export async function sampleFrames(
   file: File,
   count: number,

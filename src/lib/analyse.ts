@@ -6,6 +6,8 @@ import { analyseMovement } from './movement'
 import { buildAnalysis } from './build-analysis'
 import type { CoachOutput } from './build-analysis'
 import { sampleFrames } from './frames'
+import { detectHolds } from './holds'
+import type { HoldDetection } from './holds'
 
 export interface PipelineStage {
   id: string
@@ -21,6 +23,7 @@ export const PIPELINE: PipelineStage[] = [
   { id: 'read', label: 'Reading video', detail: 'Decoding frames in your browser' },
   { id: 'pose', label: 'Tracking body pose', detail: 'MediaPipe locating joints across the climb' },
   { id: 'moves', label: 'Measuring movement', detail: 'Joint angles, balance and move segmentation' },
+  { id: 'holds', label: 'Detecting holds', detail: 'SAM 3.1 segmenting the wall (approximate)' },
   { id: 'coach', label: 'Writing your coaching', detail: 'Muse Spark interpreting the movement' },
 ]
 
@@ -99,6 +102,18 @@ export async function analyseClimb(opts: {
     }
     onProgress({ stage: 2, fraction: 1 })
 
+    // Stage 3: hold detection (SAM 3.1). Best-effort stretch feature — if it
+    // finds nothing or isn't available, we continue with suggested targets.
+    onProgress({ stage: 3, fraction: 0.2 })
+    let detection: HoldDetection | null = null
+    try {
+      detection = await detectHolds(file, track, signal)
+    } catch (e) {
+      if (e instanceof DOMException && e.name === 'AbortError') throw e
+      detection = null
+    }
+    onProgress({ stage: 3, fraction: 1 })
+
     // Grab a few frames for visual grounding (optional; best-effort).
     let frames: string[] = []
     try {
@@ -107,12 +122,26 @@ export async function analyseClimb(opts: {
       frames = []
     }
 
-    // Stage 3: AI coaching via the secure serverless proxy.
-    onProgress({ stage: 3, fraction: 0.2 })
+    // A compact summary of detected holds so coaching can reference them.
+    const holdSummary = detection
+      ? {
+          detected: true,
+          count: detection.holds.length,
+          positions: detection.holds.slice(0, 30).map((h) => ({
+            id: h.id,
+            x: Math.round((h.x / 360) * 100) / 100,
+            y: Math.round((h.y / 540) * 100) / 100,
+          })),
+          note: 'Hold positions are normalised 0-1 (x: left→right, y: top→bottom). Approximate.',
+        }
+      : { detected: false, note: 'Holds not detected; suggest movement from body motion only.' }
+
+    // Stage 4: AI coaching via the secure serverless proxy.
+    onProgress({ stage: 4, fraction: 0.2 })
     const res = await fetch(COACH_ENDPOINT, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ observations: obs, frames, durationSec: obs.durationSec }),
+      body: JSON.stringify({ observations: obs, holds: holdSummary, frames, durationSec: obs.durationSec }),
       signal,
     })
 
@@ -137,9 +166,13 @@ export async function analyseClimb(opts: {
       console.error('[ClimbIQ] Could not parse /api/coach response:', parseErr)
       return fallback('The coaching service returned an unexpected response. Showing sample data.')
     }
-    onProgress({ stage: 3, fraction: 1 })
+    onProgress({ stage: 4, fraction: 1 })
 
-    return { analysis: buildAnalysis(coach, track, obs), poseTrack: track, usedFallback: false }
+    return {
+      analysis: buildAnalysis(coach, track, obs, detection),
+      poseTrack: track,
+      usedFallback: false,
+    }
   } catch (e) {
     if (e instanceof DOMException && e.name === 'AbortError') throw e
     // Surface the real cause in the console so failures aren't silently hidden.

@@ -12,12 +12,16 @@
 import { LM } from './pose-estimation'
 import type { PoseTrack } from './pose-estimation'
 import type { MovementObservations } from './movement'
+import { nearestHold } from './holds'
+import type { HoldDetection } from './holds'
 import type {
   Analysis,
   BetaStep,
   FeedbackItem,
   Hold,
+  Limb,
   LimbState,
+  LimbTarget,
   Metric,
   TrainingFocus,
 } from '../types'
@@ -60,12 +64,15 @@ function toWall(x: number, y: number): { x: number; y: number } {
 
 /**
  * Build a `LimbState` for a beta step from the real pose at that timestamp.
- * Each limb points at a free (suggested) position, not a detected hold id.
+ *
+ * When detected holds are supplied, each limb is SNAPPED to the nearest
+ * detected hold within tolerance (so the stick figure grabs real holds and the
+ * beta can reference them). Limbs with no nearby hold keep their free,
+ * pose-measured position. Without detection, every limb is a free position.
  */
-function limbStateAt(track: PoseTrack, t: number): LimbState {
+function limbStateAt(track: PoseTrack, t: number, holds?: Hold[]): LimbState {
   const f = frameAt(track, t)
   if (!f || !f.landmarks) {
-    // Fallback: a neutral stance if pose is missing at this instant.
     return {
       lh: { x: WALL_W * 0.38, y: WALL_H * 0.4 },
       rh: { x: WALL_W * 0.62, y: WALL_H * 0.4 },
@@ -74,12 +81,23 @@ function limbStateAt(track: PoseTrack, t: number): LimbState {
     }
   }
   const p = f.landmarks
-  return {
+  const raw: Record<Limb, { x: number; y: number }> = {
     lh: toWall(p[LM.leftWrist].x, p[LM.leftWrist].y),
     rh: toWall(p[LM.rightWrist].x, p[LM.rightWrist].y),
     lf: toWall(p[LM.leftAnkle].x, p[LM.leftAnkle].y),
     rf: toWall(p[LM.rightAnkle].x, p[LM.rightAnkle].y),
   }
+  const snap = (limb: Limb): LimbTarget => {
+    const pt = raw[limb]
+    if (holds && holds.length) {
+      // Hands reach a bit further to a hold than feet (smears are looser).
+      const tol = limb.endsWith('h') ? 64 : 80
+      const h = nearestHold(holds, pt.x, pt.y, tol)
+      if (h) return h.id
+    }
+    return pt
+  }
+  return { lh: snap('lh'), rh: snap('rh'), lf: snap('lf'), rf: snap('rf') }
 }
 
 /**
@@ -113,20 +131,62 @@ function suggestedHolds(beta: BetaStep[]): Hold[] {
   return holds
 }
 
-const cueFor = (i: number): BetaStep['cue'] => ({
-  text: '',
+const cueFor = (i: number, title: string): BetaStep['cue'] => ({
+  // Short cue shown by the hip marker; fall back to the move title.
+  text: title.length <= 28 ? title : `${title.slice(0, 26)}…`,
   side: i % 2 === 0 ? 'right' : 'left',
 })
 
-/** Assemble the UI-ready `Analysis` from model output + real pose. */
+/**
+ * Mark hold kinds from how limbs use them across the beta:
+ * - holds used by a hand → 'hand'; the highest such hold → 'finish'
+ * - holds only used by a foot → 'foot'
+ * - detected holds never grabbed → 'off' (detected but off the suggested line)
+ */
+function classifyHolds(holds: Hold[], beta: BetaStep[]): Hold[] {
+  const handIds = new Set<string>()
+  const footIds = new Set<string>()
+  for (const step of beta) {
+    for (const l of ['lh', 'rh', 'lf', 'rf'] as Limb[]) {
+      const t = step.limbs[l]
+      if (typeof t !== 'string') continue
+      if (l.endsWith('h')) handIds.add(t)
+      else footIds.add(t)
+    }
+  }
+  // Highest (smallest y) hand hold is the finish.
+  let finishId: string | null = null
+  let finishY = Infinity
+  for (const h of holds) {
+    if (handIds.has(h.id) && h.y < finishY) {
+      finishY = h.y
+      finishId = h.id
+    }
+  }
+  return holds.map((h) => {
+    let kind = h.kind
+    if (h.id === finishId) kind = 'finish'
+    else if (handIds.has(h.id)) kind = 'hand'
+    else if (footIds.has(h.id)) kind = 'foot'
+    else kind = 'off'
+    return { ...h, kind }
+  })
+}
+
+/** Assemble the UI-ready `Analysis` from model output + real pose (+ optional holds). */
 export function buildAnalysis(
   coach: CoachOutput,
   track: PoseTrack,
   obs: MovementObservations,
+  detection?: HoldDetection | null,
 ): Analysis {
-  // Attach measured limb positions + a hip-shift proxy to each coaching step.
+  const detectedHolds = detection?.holds
+  const hasDetection = !!detectedHolds && detectedHolds.length > 0
+
+  // Attach measured limb positions (snapped to detected holds when available)
+  // + a hip-shift proxy to each coaching step.
   const beta: BetaStep[] = coach.beta.map((s, i) => {
-    const limbs = limbStateAt(track, s.timestamp)
+    const limbs = limbStateAt(track, s.timestamp, detectedHolds)
     const f = frameAt(track, s.timestamp)
     let hipShift = 0
     if (f?.landmarks) {
@@ -135,31 +195,33 @@ export function buildAnalysis(
       const shoulderMid = (p[LM.leftShoulder].x + p[LM.rightShoulder].x) / 2
       hipShift = (hipMid - shoulderMid) * WALL_W
     }
-    return {
-      ...s,
-      id: s.id || `step-${i + 1}`,
-      limbs,
-      hipShift,
-      cue: cueFor(i),
-    }
+    return { ...s, id: s.id || `step-${i + 1}`, limbs, hipShift, cue: cueFor(i, s.title) }
   })
 
-  const holds = suggestedHolds(beta)
+  // Holds: real detected holds (classified by use) when we have them;
+  // otherwise suggested target points from measured hand positions.
+  const holds = hasDetection ? classifyHolds(detectedHolds, beta) : suggestedHolds(beta)
+
+  const notes = [...obs.notes]
+  if (hasDetection) {
+    notes.unshift(
+      `Holds detected with SAM 3.1 (approximate): ${holds.filter((h) => h.kind !== 'off').length} on the suggested line of ${holds.length} found.`,
+    )
+  }
 
   return {
     source: 'ai',
     provenance: {
       poseDetectionRate: obs.detectionRate,
       framesSampled: obs.frameCount,
-      holdsDetected: false,
-      notes: obs.notes,
+      holdsDetected: hasDetection,
+      notes,
     },
     climb: {
       outcome: coach.climb.outcome,
       durationSec: coach.climb.durationSec || obs.durationSec,
       moves: beta.length,
-      // Honest: we place suggested targets, we do not detect holds.
-      holdsDetected: 0,
+      holdsDetected: hasDetection ? holds.length : 0,
     },
     metrics: coach.metrics,
     holds,

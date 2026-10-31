@@ -14,6 +14,8 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 interface CoachRequest {
   /** Measurable, pose-derived facts produced in the browser by MediaPipe. */
   observations: unknown
+  /** Detected holds summary from SAM 3.1 (approximate), or {detected:false}. */
+  holds?: unknown
   /** Optional base64 data URLs of a few sampled frames for visual grounding. */
   frames?: string[]
   /** Clip length in seconds, so timestamps land inside the video. */
@@ -176,6 +178,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         '```json\n' +
         JSON.stringify(payload.observations, null, 2) +
         '\n```\n\n' +
+        `Detected holds (Meta SAM 3.1, approximate):\n` +
+        '```json\n' +
+        JSON.stringify(payload.holds ?? { detected: false }, null, 2) +
+        '\n```\n\n' +
+        'When holds are detected, reference them in your beta (e.g. which hold a ' +
+        'hand/foot should move to, using the normalised positions) and keep moves ' +
+        'consistent with where the climber actually was. When holds are NOT detected, ' +
+        'suggest movement from body motion only and do not invent specific holds.\n\n' +
         'Produce the coaching JSON for this attempt.',
     },
   ]

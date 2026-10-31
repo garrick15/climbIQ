@@ -49,8 +49,17 @@ export function ResultsView({ analysis, videoUrl, fileName, fallbackReason, pose
             <span className="font-medium text-good">Live analysis of your climb.</span> Body pose was tracked with
             MediaPipe
             {analysis.provenance ? ` (detected in ${Math.round(analysis.provenance.poseDetectionRate * 100)}% of sampled frames)` : ''}
-            ; the coaching is Muse Spark interpreting that movement. Beta is a <em>suggested</em> sequence and target
-            holds are approximate — hold detection is not enabled.
+            ; the coaching is Muse Spark interpreting that movement.{' '}
+            {analysis.provenance?.holdsDetected ? (
+              <>
+                Holds were detected with SAM&nbsp;3.1 (<em>approximate</em>). Beta is a <em>suggested</em> sequence.
+              </>
+            ) : (
+              <>
+                Beta is a <em>suggested</em> sequence and target holds are approximate — automatic hold detection found
+                too few holds on this clip, so targets are placed from your hand positions.
+              </>
+            )}
           </p>
         </div>
       ) : (
@@ -79,7 +88,9 @@ export function ResultsView({ analysis, videoUrl, fileName, fallbackReason, pose
                 icon: Mountain,
                 text:
                   analysis.source === 'ai'
-                    ? `${analysis.holds.length} suggested targets`
+                    ? analysis.provenance?.holdsDetected
+                      ? `${analysis.holds.length} holds detected`
+                      : `${analysis.holds.length} suggested targets`
                     : `${analysis.climb.holdsDetected} holds detected`,
               },
             ].map(({ icon: Icon, text }) => (
