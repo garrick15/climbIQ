@@ -4,7 +4,6 @@ import { estimatePose } from './pose-estimation'
 import type { LiveFrame, PoseTrack } from './pose-estimation'
 import { analyseMovement } from './movement'
 import { buildAnalysis } from './build-analysis'
-import type { CoachOutput } from './build-analysis'
 import { sampleFrames } from './frames'
 import { detectHolds } from './holds'
 import type { HoldDetection } from './holds'
@@ -168,11 +167,13 @@ export async function analyseClimb(opts: {
 
     // Parse the coaching payload defensively: a non-OK body or an HTML error
     // page would otherwise throw here and be hidden as a generic failure.
-    let coach: CoachOutput
+    // buildAnalysis() normalises whatever shape the model returned, so we pass
+    // the raw `analysis` through without asserting its structure here.
+    let coachRaw: unknown
     try {
-      const data = (await res.json()) as { analysis?: CoachOutput }
-      if (!data.analysis) throw new Error('Coaching response had no "analysis" field.')
-      coach = data.analysis
+      const data = (await res.json()) as { analysis?: unknown }
+      if (data.analysis == null) throw new Error('Coaching response had no "analysis" field.')
+      coachRaw = data.analysis
     } catch (parseErr) {
       console.error('[ClimbIQ] Could not parse /api/coach response:', parseErr)
       return fallback('The coaching service returned an unexpected response. Showing sample data.')
@@ -180,7 +181,7 @@ export async function analyseClimb(opts: {
     onProgress({ stage: 4, fraction: 1 })
 
     return {
-      analysis: buildAnalysis(coach, track, obs, detection),
+      analysis: buildAnalysis(coachRaw, track, obs, detection),
       poseTrack: track,
       usedFallback: false,
     }

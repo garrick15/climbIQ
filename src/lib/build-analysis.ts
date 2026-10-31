@@ -173,19 +173,118 @@ function classifyHolds(holds: Hold[], beta: BetaStep[]): Hold[] {
   })
 }
 
+const asArray = <T>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : [])
+const asNum = (v: unknown, fallback: number): number =>
+  typeof v === 'number' && Number.isFinite(v) ? v : fallback
+const asStr = (v: unknown, fallback = ''): string => (typeof v === 'string' ? v : fallback)
+
+/**
+ * Normalise the model's output into a guaranteed-complete CoachOutput.
+ * The model can omit fields, rename them, or return the wrong type (especially
+ * when strict schema is dropped on the retry path). We coerce everything so the
+ * pipeline and UI never read `.length`/`.map` on undefined.
+ */
+function normaliseCoach(raw: unknown, obs: MovementObservations): CoachOutput {
+  const c = (raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}) as Record<string, unknown>
+  const climb = (c.climb && typeof c.climb === 'object' ? (c.climb as Record<string, unknown>) : {}) as Record<string, unknown>
+
+  const beta = asArray<Record<string, unknown>>(c.beta).map((s, i) => ({
+    id: asStr(s.id) || `step-${i + 1}`,
+    title: asStr(s.title, `Move ${i + 1}`),
+    summary: asStr(s.summary),
+    bodyPosition: asStr(s.bodyPosition),
+    why: asStr(s.why),
+    yourAttempt: asStr(s.yourAttempt),
+    timestamp: asNum(s.timestamp, (i / Math.max(1, asArray(c.beta).length)) * obs.durationSec),
+    crux: typeof s.crux === 'boolean' ? s.crux : undefined,
+  }))
+
+  const metrics = asArray<Record<string, unknown>>(c.metrics).map((m, i) => ({
+    id: asStr(m.id) || `m-${i}`,
+    label: asStr(m.label, 'Metric'),
+    value: Math.min(100, Math.max(0, asNum(m.value, 0))),
+    note: asStr(m.note),
+  }))
+
+  const feedback = asArray<Record<string, unknown>>(c.feedback).map((f, i) => ({
+    id: asStr(f.id) || `fb-${i}`,
+    kind: f.kind === 'strength' ? ('strength' as const) : ('improve' as const),
+    timestamp: asNum(f.timestamp, 0),
+    title: asStr(f.title, 'Note'),
+    observation: asStr(f.observation),
+    why: asStr(f.why),
+    tryThis: typeof f.tryThis === 'string' ? f.tryThis : undefined,
+    skill: asStr(f.skill, 'General'),
+    stepId: typeof f.stepId === 'string' ? f.stepId : undefined,
+  }))
+
+  const training = asArray<Record<string, unknown>>(c.training).map((t, i) => ({
+    id: asStr(t.id) || `tr-${i}`,
+    rank: asNum(t.rank, i + 1),
+    skill: asStr(t.skill, 'Technique'),
+    headline: asStr(t.headline, asStr(t.skill, 'Focus')),
+    reason: asStr(t.reason),
+    impact: t.impact === 'High' ? ('High' as const) : ('Medium' as const),
+    impactScore: Math.min(100, Math.max(0, asNum(t.impactScore, 60))),
+    cue: asStr(t.cue),
+    cadence: asStr(t.cadence, '2 sessions a week'),
+    evidence: asArray<Record<string, unknown>>(t.evidence).map((e) => ({
+      timestamp: asNum(e.timestamp, 0),
+      label: asStr(e.label, 'See clip'),
+    })),
+    drills: asArray<Record<string, unknown>>(t.drills).map((d) => ({
+      name: asStr(d.name, 'Drill'),
+      prescription: asStr(d.prescription),
+      detail: asStr(d.detail),
+    })),
+  }))
+
+  return {
+    climb: {
+      outcome: asStr(climb.outcome, 'Attempt analysed'),
+      durationSec: asNum(climb.durationSec, obs.durationSec),
+      moves: asNum(climb.moves, beta.length),
+      holdsDetected: asNum(climb.holdsDetected, 0),
+    },
+    metrics,
+    beta,
+    feedback,
+    training,
+  }
+}
+
 /** Assemble the UI-ready `Analysis` from model output + real pose (+ optional holds). */
 export function buildAnalysis(
-  coach: CoachOutput,
+  rawCoach: unknown,
   track: PoseTrack,
   obs: MovementObservations,
   detection?: HoldDetection | null,
 ): Analysis {
+  // Coerce the model output into a complete, well-typed shape first.
+  const coach = normaliseCoach(rawCoach, obs)
+
   const detectedHolds = detection?.holds
   const hasDetection = !!detectedHolds && detectedHolds.length > 0
 
+  // If the model gave us no beta at all, synthesise one step per detected move
+  // so the Visual Beta is never empty (uses the real pose + move timings).
+  const betaSource =
+    coach.beta.length > 0
+      ? coach.beta
+      : obs.moves.map((m, i) => ({
+          id: `step-${i + 1}`,
+          title: `Move ${i + 1}`,
+          summary: 'Suggested from your movement. The coach did not return a description for this move.',
+          bodyPosition: '',
+          why: '',
+          yourAttempt: '',
+          timestamp: m.startT,
+          crux: undefined,
+        }))
+
   // Attach measured limb positions (snapped to detected holds when available)
   // + a hip-shift proxy to each coaching step.
-  const beta: BetaStep[] = coach.beta.map((s, i) => {
+  const beta: BetaStep[] = betaSource.map((s, i) => {
     const limbs = limbStateAt(track, s.timestamp, detectedHolds)
     const f = frameAt(track, s.timestamp)
     let hipShift = 0
@@ -197,6 +296,22 @@ export function buildAnalysis(
     }
     return { ...s, id: s.id || `step-${i + 1}`, limbs, hipShift, cue: cueFor(i, s.title) }
   })
+
+  // The Visual Beta reads beta[stepIndex]; never let it be empty.
+  if (beta.length === 0) {
+    beta.push({
+      id: 'step-1',
+      title: 'Your attempt',
+      summary: 'We tracked your body but could not segment distinct moves on this clip.',
+      bodyPosition: '',
+      why: '',
+      yourAttempt: '',
+      timestamp: 0,
+      limbs: limbStateAt(track, obs.durationSec / 2, detectedHolds),
+      hipShift: 0,
+      cue: cueFor(0, 'Your attempt'),
+    })
+  }
 
   // Holds: real detected holds (classified by use) when we have them;
   // otherwise suggested target points from measured hand positions.
