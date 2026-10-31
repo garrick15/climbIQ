@@ -77,15 +77,40 @@ let landmarkerPromise: Promise<PoseLandmarker> | null = null
 async function getLandmarker(): Promise<PoseLandmarker> {
   if (!landmarkerPromise) {
     landmarkerPromise = (async () => {
-      const fileset = await FilesetResolver.forVisionTasks(WASM_BASE)
-      return PoseLandmarker.createFromOptions(fileset, {
-        baseOptions: { modelAssetPath: MODEL_URL, delegate: 'GPU' },
-        runningMode: 'VIDEO',
-        numPoses: 1,
-        minPoseDetectionConfidence: 0.5,
-        minPosePresenceConfidence: 0.5,
-        minTrackingConfidence: 0.5,
-      })
+      let fileset
+      try {
+        fileset = await FilesetResolver.forVisionTasks(WASM_BASE)
+      } catch (e) {
+        throw new Error(
+          `Could not load the MediaPipe pose engine (WASM). This can be a network or ` +
+            `content-security-policy block on ${WASM_BASE}. Original error: ${String(e)}`,
+        )
+      }
+
+      const create = (delegate: 'GPU' | 'CPU') =>
+        PoseLandmarker.createFromOptions(fileset, {
+          baseOptions: { modelAssetPath: MODEL_URL, delegate },
+          runningMode: 'VIDEO',
+          numPoses: 1,
+          minPoseDetectionConfidence: 0.5,
+          minPosePresenceConfidence: 0.5,
+          minTrackingConfidence: 0.5,
+        })
+
+      // Prefer GPU, but fall back to CPU where WebGL is unavailable/blocked.
+      try {
+        return await create('GPU')
+      } catch (gpuErr) {
+        console.warn('[ClimbIQ] Pose GPU delegate failed, retrying on CPU:', gpuErr)
+        try {
+          return await create('CPU')
+        } catch (cpuErr) {
+          throw new Error(
+            `Could not create the pose model from ${MODEL_URL}. ` +
+              `GPU and CPU both failed. Original error: ${String(cpuErr)}`,
+          )
+        }
+      }
     })().catch((e) => {
       landmarkerPromise = null // allow a retry on next call
       throw e

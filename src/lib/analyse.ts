@@ -123,14 +123,28 @@ export async function analyseClimb(opts: {
       return fallback(err.message || `Coaching service returned ${res.status}. Showing sample data.`)
     }
 
-    const { analysis: coach } = (await res.json()) as { analysis: CoachOutput }
+    // Parse the coaching payload defensively: a non-OK body or an HTML error
+    // page would otherwise throw here and be hidden as a generic failure.
+    let coach: CoachOutput
+    try {
+      const data = (await res.json()) as { analysis?: CoachOutput }
+      if (!data.analysis) throw new Error('Coaching response had no "analysis" field.')
+      coach = data.analysis
+    } catch (parseErr) {
+      console.error('[ClimbIQ] Could not parse /api/coach response:', parseErr)
+      return fallback('The coaching service returned an unexpected response. Showing sample data.')
+    }
     onProgress({ stage: 3, fraction: 1 })
 
     return { analysis: buildAnalysis(coach, track, obs), poseTrack: track, usedFallback: false }
   } catch (e) {
     if (e instanceof DOMException && e.name === 'AbortError') throw e
+    // Surface the real cause in the console so failures aren't silently hidden.
+    console.error('[ClimbIQ] Analysis pipeline failed:', e)
     return fallback(
-      e instanceof Error ? `${e.message} Showing sample data instead.` : 'Analysis failed. Showing sample data.',
+      e instanceof Error
+        ? `${e.message} (Showing sample data — see the browser console for details.)`
+        : 'Analysis failed. Showing sample data — see the browser console for details.',
     )
   }
 }
