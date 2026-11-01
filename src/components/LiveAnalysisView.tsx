@@ -11,7 +11,7 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { POSE_CONNECTIONS } from '../lib/pose-estimation'
 import type { LiveFrame } from '../lib/pose-estimation'
-import { frameMetrics } from '../lib/movement'
+import { bioFrame } from '../lib/biomechanics'
 import { cx } from './ui'
 
 interface Props {
@@ -55,13 +55,10 @@ export function LiveAnalysisView({ frame }: Props) {
   const lm = frame?.landmarks ?? null
   const pts = lm && box.width ? lm.map((l) => fit(l.x, l.y, video, box)) : null
 
-  // Real per-frame metrics from the measured landmarks.
-  const metrics =
-    frame && lm
-      ? frameMetrics({ t: frame.t, landmarks: lm, visibility: frame.visibility })
-      : null
-  const angles = metrics?.angles ?? null
-  const com = metrics?.com ?? null
+  // Real per-frame biomechanics from the measured landmarks.
+  const bio = frame && lm ? bioFrame({ t: frame.t, landmarks: lm, visibility: frame.visibility }) : null
+  const angles = bio?.angles ?? null
+  const com = bio?.com ?? null
 
   const meanVisibility =
     frame?.visibility && frame.visibility.length
@@ -184,20 +181,27 @@ export function LiveAnalysisView({ frame }: Props) {
         )}
       </div>
 
-      {/* Live stats readout */}
+      {/* Live biomechanics readout */}
       <div className="mx-auto mt-3 grid max-w-[360px] grid-cols-3 gap-2">
         <Stat label="L elbow" value={deg(angles?.leftElbow ?? NaN)} />
         <Stat label="R elbow" value={deg(angles?.rightElbow ?? NaN)} />
         <Stat label="Confidence" value={frame?.landmarks ? `${Math.round(meanVisibility * 100)}%` : '—'} highlight />
         <Stat label="L knee" value={deg(angles?.leftKnee ?? NaN)} />
         <Stat label="R knee" value={deg(angles?.rightKnee ?? NaN)} />
+        <Stat label="Torso tilt" value={bio?.torsoInclination != null ? deg(Math.abs(bio.torsoInclination)) : '—'} />
         <Stat
-          label="Approx COM"
-          value={com ? `${com.x.toFixed(2)}, ${com.y.toFixed(2)}` : '—'}
+          label="Arm ext."
+          value={bio?.armExtensionL != null ? `${Math.round(((bio.armExtensionL + (bio.armExtensionR ?? 0)) / 2) * 100)}%` : '—'}
+        />
+        <Stat label="Hip rot." value={bio?.hipRotation != null ? deg(Math.abs(bio.hipRotation)) : '—'} />
+        <Stat
+          label="Balance"
+          value={bio?.comSupport ? (bio.comSupport.inside ? 'Over base' : 'Off base') : '—'}
+          highlight={bio?.comSupport ? !bio.comSupport.inside : false}
         />
       </div>
       <p className="mx-auto mt-2 max-w-[360px] px-1 text-center text-[10.5px] leading-snug text-slate-600">
-        Live pose from MediaPipe. Centre of mass (amber) is an approximate 2D estimate.
+        Live pose from MediaPipe. COM (amber) &amp; balance are approximate 2D estimates.
       </p>
     </div>
   )

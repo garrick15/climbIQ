@@ -13,6 +13,8 @@
 import { LM } from './pose-estimation'
 import type { PoseFrame, PoseTrack } from './pose-estimation'
 import type { NormalizedLandmark } from '@mediapipe/tasks-vision'
+import { bioSummary } from './biomechanics'
+import type { BioSummary } from './biomechanics'
 
 export interface JointAngles {
   /** interior angle at the elbow, degrees (180 = straight arm) */
@@ -73,6 +75,8 @@ export interface MovementObservations {
   }
   moves: MoveSegment[]
   pauses: PauseEvent[]
+  /** sequence-level biomechanics (COM, stability, smoothness, asymmetry…) */
+  biomechanics: BioSummary
   /** per-frame series, downsampled for the model prompt */
   samples: FrameMetrics[]
   notes: string[]
@@ -251,14 +255,35 @@ export function analyseMovement(track: PoseTrack): MovementObservations | null {
       hipDeviation: m.hipDeviation == null ? null : round(m.hipDeviation),
     }))
 
+  // Full biomechanics (spec #1–#19), rounded for the prompt.
+  const { summary: bio } = bioSummary(track)
+  const r = (n: number, d = 3) => (Number.isFinite(n) ? round(n, d) : null)
+  const biomechanics: BioSummary = {
+    rmsSway: r(bio.rmsSway) ?? 0,
+    maxSwing: r(bio.maxSwing) ?? 0,
+    meanComSpeed: r(bio.meanComSpeed) ?? 0,
+    rmsJerk: r(bio.rmsJerk) ?? 0,
+    rmsAngularVelocity: r(bio.rmsAngularVelocity, 1) ?? 0,
+    asymmetry: {
+      elbow: r(bio.asymmetry.elbow, 1) ?? 0,
+      shoulder: r(bio.asymmetry.shoulder, 1) ?? 0,
+      hip: r(bio.asymmetry.hip, 1) ?? 0,
+      knee: r(bio.asymmetry.knee, 1) ?? 0,
+    },
+    meanTorsoInclination: r(bio.meanTorsoInclination, 1) ?? 0,
+    comOutsideFraction: r(bio.comOutsideFraction, 2) ?? 0,
+    footSlipFlags: bio.footSlipFlags,
+  }
+
   const notes: string[] = []
   if (track.detectionRate < 0.7) {
     notes.push(
       `Body detected in ${Math.round(track.detectionRate * 100)}% of sampled frames; parts of the climb may be occluded or out of frame.`,
     )
   }
-  notes.push('Centre of mass is an approximate 2D estimate from hips and shoulders.')
-  notes.push('Hold positions are not detected; beta is suggested from body movement only.')
+  notes.push('Centre of mass is an approximate 2D estimate; stability (COM vs support) is a simplified indicator.')
+  notes.push('Left-right asymmetry is reported, not judged as wrong. Foot-movement flags are not necessarily slips.')
+  notes.push('Hold positions, when present, come from SAM 3.1 and are approximate.')
 
   return {
     durationSec: round(duration, 1),
@@ -281,6 +306,7 @@ export function analyseMovement(track: PoseTrack): MovementObservations | null {
     },
     moves,
     pauses,
+    biomechanics,
     samples,
     notes,
   }

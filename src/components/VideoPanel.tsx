@@ -1,11 +1,12 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { Film, PersonStanding, Pause, Play } from 'lucide-react'
+import { Film, PersonStanding, Pause, Play, Route } from 'lucide-react'
 import type { Analysis } from '../types'
 import { SPEEDS } from '../lib/usePlayer'
 import type { Player } from '../lib/usePlayer'
 import type { PoseTrack } from '../lib/pose-estimation'
 import { formatTime } from '../lib/video'
 import { SkeletonOverlay } from './SkeletonOverlay'
+import { BetaVideoOverlay } from './BetaVideoOverlay'
 import { Card, cx } from './ui'
 
 interface Props {
@@ -22,6 +23,7 @@ export function VideoPanel({ analysis, player, fileName, poseTrack }: Props) {
   const stageRef = useRef<HTMLDivElement>(null)
   const [box, setBox] = useState({ width: 0, height: 0 })
   const [showSkeleton, setShowSkeleton] = useState(true)
+  const [showBeta, setShowBeta] = useState(true)
 
   // Measure the video stage so the overlay letterboxes correctly.
   useLayoutEffect(() => {
@@ -72,6 +74,16 @@ export function VideoPanel({ analysis, player, fileName, poseTrack }: Props) {
           </div>
         )}
 
+        {/* Suggested beta for the current move, synced to playback. */}
+        {src && showBeta && analysis.source === 'ai' && poseTrack && (
+          <BetaVideoOverlay
+            analysis={analysis}
+            activeStep={Math.max(0, stepIdx)}
+            box={box}
+            video={{ w: poseTrack.width, h: poseTrack.height }}
+          />
+        )}
+
         {/* Real detected pose, drawn over the video and synced to playback. */}
         {src && hasPose && showSkeleton && poseTrack && (
           <SkeletonOverlay track={poseTrack} time={time} box={box} />
@@ -85,22 +97,43 @@ export function VideoPanel({ analysis, player, fileName, poseTrack }: Props) {
           </div>
         )}
 
-        {src && hasPose && (
-          <button
-            type="button"
-            onClick={() => setShowSkeleton((s) => !s)}
-            aria-pressed={showSkeleton}
-            title={showSkeleton ? 'Hide pose skeleton' : 'Show pose skeleton'}
-            className={cx(
-              'absolute right-3 top-3 inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-medium backdrop-blur transition-colors',
-              showSkeleton
-                ? 'border-accent-400/50 bg-accent-500/25 text-accent-100'
-                : 'border-white/10 bg-ink-950/70 text-slate-300 hover:text-white',
+        {src && (hasPose || analysis.source === 'ai') && (
+          <div className="absolute right-3 top-3 flex flex-col items-end gap-1.5">
+            {analysis.source === 'ai' && (
+              <button
+                type="button"
+                onClick={() => setShowBeta((s) => !s)}
+                aria-pressed={showBeta}
+                title={showBeta ? 'Hide suggested beta' : 'Show suggested beta'}
+                className={cx(
+                  'inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-medium backdrop-blur transition-colors',
+                  showBeta
+                    ? 'border-accent-400/50 bg-accent-500/25 text-accent-100'
+                    : 'border-white/10 bg-ink-950/70 text-slate-300 hover:text-white',
+                )}
+              >
+                <Route className="h-3.5 w-3.5" aria-hidden />
+                Beta
+              </button>
             )}
-          >
-            <PersonStanding className="h-3.5 w-3.5" aria-hidden />
-            Pose
-          </button>
+            {hasPose && (
+              <button
+                type="button"
+                onClick={() => setShowSkeleton((s) => !s)}
+                aria-pressed={showSkeleton}
+                title={showSkeleton ? 'Hide pose skeleton' : 'Show pose skeleton'}
+                className={cx(
+                  'inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-medium backdrop-blur transition-colors',
+                  showSkeleton
+                    ? 'border-accent-400/50 bg-accent-500/25 text-accent-100'
+                    : 'border-white/10 bg-ink-950/70 text-slate-300 hover:text-white',
+                )}
+              >
+                <PersonStanding className="h-3.5 w-3.5" aria-hidden />
+                Pose
+              </button>
+            )}
+          </div>
         )}
 
         {!playing && (
