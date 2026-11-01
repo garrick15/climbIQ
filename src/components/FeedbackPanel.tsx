@@ -122,11 +122,13 @@ export function FeedbackPanel({ analysis, time, onSeek, onOpenStep }: Props) {
                   <TimeChip t={f.timestamp} onClick={(t) => onSeek(Math.max(0, t - 0.5), true)} active={active} />
                 </div>
 
-                <p className="mt-3 text-sm leading-relaxed text-slate-300">{f.observation}</p>
-                <p className="mt-2 text-sm leading-relaxed text-slate-400">
-                  <span className="font-medium text-slate-300">Why it matters: </span>
-                  {f.why}
-                </p>
+                {f.observation && <p className="mt-3 text-sm leading-relaxed text-slate-300">{f.observation}</p>}
+                {f.why && (
+                  <p className="mt-2 text-sm leading-relaxed text-slate-400">
+                    <span className="font-medium text-slate-300">Why it matters: </span>
+                    {f.why}
+                  </p>
+                )}
 
                 {f.tryThis && (
                   <div className="mt-3 flex gap-2.5 rounded-xl border border-accent-500/25 bg-accent-500/[0.07] p-3 text-sm leading-relaxed text-slate-200">
@@ -151,6 +153,14 @@ export function FeedbackPanel({ analysis, time, onSeek, onOpenStep }: Props) {
             </li>
           )
         })}
+        {shown.length === 0 && (
+          <li>
+            <Card className="p-6 text-center text-sm text-slate-400">
+              No feedback notes for this view. Try a clearer, side-on clip with your whole body in frame for more
+              detailed coaching.
+            </Card>
+          </li>
+        )}
       </ol>
     </div>
   )

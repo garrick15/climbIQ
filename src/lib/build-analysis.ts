@@ -207,17 +207,21 @@ function normaliseCoach(raw: unknown, obs: MovementObservations): CoachOutput {
     note: asStr(m.note),
   }))
 
-  const feedback = asArray<Record<string, unknown>>(c.feedback).map((f, i) => ({
-    id: asStr(f.id) || `fb-${i}`,
-    kind: f.kind === 'strength' ? ('strength' as const) : ('improve' as const),
-    timestamp: asNum(f.timestamp, 0),
-    title: asStr(f.title, 'Note'),
-    observation: asStr(f.observation),
-    why: asStr(f.why),
-    tryThis: typeof f.tryThis === 'string' ? f.tryThis : undefined,
-    skill: asStr(f.skill, 'General'),
-    stepId: typeof f.stepId === 'string' ? f.stepId : undefined,
-  }))
+  const feedback = asArray<Record<string, unknown>>(c.feedback)
+    .map((f, i) => ({
+      id: asStr(f.id) || `fb-${i}`,
+      kind: f.kind === 'strength' ? ('strength' as const) : ('improve' as const),
+      timestamp: asNum(f.timestamp, 0),
+      title: asStr(f.title),
+      observation: asStr(f.observation),
+      why: asStr(f.why),
+      tryThis: typeof f.tryThis === 'string' ? f.tryThis : undefined,
+      skill: asStr(f.skill, 'General'),
+      stepId: typeof f.stepId === 'string' ? f.stepId : undefined,
+    }))
+    // Drop empty/blank items so the UI never shows a hollow "Note / Why it matters:".
+    .filter((f) => f.title.trim() || f.observation.trim())
+    .map((f) => ({ ...f, title: f.title || 'Observation' }))
 
   const training = asArray<Record<string, unknown>>(c.training).map((t, i) => ({
     id: asStr(t.id) || `tr-${i}`,

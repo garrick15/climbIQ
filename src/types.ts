@@ -35,10 +35,20 @@ export interface Hold extends Point {
   rx: number
   ry: number
   rot: number
-  /** estimated physical hold type (jug, crimp, sloper…) */
+  /**
+   * Estimated physical hold TYPE → drives the rendered SHAPE (jug, crimp,
+   * sloper…). Shape identifies what kind of hold it is.
+   */
   type?: HoldType
-  /** hex colour for the hold glyph (falls back to a per-type default) */
+  /**
+   * The hold's physical COLOUR on the wall (hex), sampled from the frame.
+   * In real climbing, colour identifies which ROUTE a hold belongs to — so
+   * this is what the planned "I climbed the red route" feature filters on.
+   * It is NOT the render accent (route membership is drawn with the app accent).
+   */
   color?: string
+  /** coarse colour-name bucket of `color`, for route grouping/filtering */
+  routeColor?: string
 }
 
 /** A limb is either on a hold (by id) or at a free point (flag / smear). */

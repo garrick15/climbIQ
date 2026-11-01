@@ -148,10 +148,14 @@ export function VisualBeta({ analysis, stepIndex, onStep, onSeek, followVideo }:
                 <div className="flex items-center justify-between">
                   <span className="font-mono text-[10px] tracking-wider text-slate-500">{LIMB_LABEL[l]}</span>
                   {holdType ? (
-                    <span
-                      className="rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide"
-                      style={{ background: `${heldHold!.color ?? '#5b6480'}33`, color: heldHold!.color ?? '#c4b5fd' }}
-                    >
+                    <span className="inline-flex items-center gap-1 rounded bg-accent-500/20 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-accent-200">
+                      {heldHold?.color && (
+                        <span
+                          className="h-2 w-2 rounded-full ring-1 ring-white/30"
+                          style={{ background: heldHold.color }}
+                          title={heldHold.routeColor ? `${heldHold.routeColor} hold` : 'hold colour'}
+                        />
+                      )}
                       {holdType}
                     </span>
                   ) : isMoved && stepIndex > 0 ? (

@@ -37,8 +37,16 @@ Your job is to interpret those measurements and produce coaching. Follow these r
 - Treat the centre of mass as an APPROXIMATE 2D estimate.
 - Present beta as SUGGESTED movement, never as guaranteed instructions.
 - Tie feedback to the timestamps present in the observations.
-- Be specific, encouraging and concrete. Prefer one clear cue per point.
-- Produce one beta step per detected move, 2-4 feedback items, and 2-3 training focuses.
+
+CONTENT REQUIREMENTS (every field must be filled with real, specific text — never blank):
+- feedback: produce 4-6 items. Include AT LEAST ONE "strength" (something done well) and
+  2-4 "improve" items. For EACH item write a concrete "title" (a short headline, e.g.
+  "Hips swung off the wall"), an "observation" (what the data shows, 1-2 sentences), a
+  "why" (why it matters), and for "improve" items a "tryThis" (one actionable cue). Set a
+  real "timestamp" (seconds) and a specific "skill" (e.g. "Hip positioning", "Footwork").
+- beta: one step per detected move; fill title, summary, bodyPosition, why and yourAttempt.
+- metrics: 3-4 scored 0-100 with a short note each.
+- Never return empty strings. If unsure, give your best coaching judgement rather than blank.
 
 Return ONLY valid JSON matching the provided schema. No prose outside the JSON.`
 

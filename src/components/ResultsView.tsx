@@ -1,16 +1,15 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Clock, Info, Mountain, MessageSquareText, Route, Target, Trophy } from 'lucide-react'
+import { Clock, Info, Mountain, MessageSquareText, Route, Trophy } from 'lucide-react'
 import type { Analysis } from '../types'
 import { usePlayer } from '../lib/usePlayer'
 import { formatTime } from '../lib/video'
 import type { PoseTrack } from '../lib/pose-estimation'
 import { FeedbackPanel } from './FeedbackPanel'
-import { TrainingPanel } from './TrainingPanel'
 import { VideoPanel } from './VideoPanel'
 import { VisualBeta } from './VisualBeta'
 import { Card, Eyebrow, Meter, cx } from './ui'
 
-type Tab = 'beta' | 'feedback' | 'training'
+type Tab = 'beta' | 'feedback'
 
 interface Props {
   analysis: Analysis
@@ -53,7 +52,6 @@ export function ResultsView({ analysis, videoUrl, fileName, fallbackReason, pose
   const tabs: { id: Tab; label: string; hint: string; icon: typeof Route }[] = [
     { id: 'beta', label: 'Visual Beta', hint: `${analysis.beta.length} moves`, icon: Route },
     { id: 'feedback', label: 'Feedback', hint: `${analysis.feedback.length} notes`, icon: MessageSquareText },
-    { id: 'training', label: 'Training Focus', hint: `${analysis.training.length} skills`, icon: Target },
   ]
 
   const openStep = (stepId: string) => {
@@ -151,7 +149,7 @@ export function ResultsView({ analysis, videoUrl, fileName, fallbackReason, pose
         </div>
 
         <section aria-label="Coaching output">
-          <div className="grid grid-cols-3 gap-1 rounded-xl border bg-ink-850 p-1" role="tablist" aria-label="Coaching output">
+          <div className="grid grid-cols-2 gap-1 rounded-xl border bg-ink-850 p-1" role="tablist" aria-label="Coaching output">
             {tabs.map((t) => {
               const Icon = t.icon
               const active = tab === t.id
@@ -205,7 +203,6 @@ export function ResultsView({ analysis, videoUrl, fileName, fallbackReason, pose
             {tab === 'feedback' && (
               <FeedbackPanel analysis={analysis} time={player.time} onSeek={player.seek} onOpenStep={openStep} />
             )}
-            {tab === 'training' && <TrainingPanel analysis={analysis} onSeek={player.seek} />}
           </div>
         </section>
       </div>

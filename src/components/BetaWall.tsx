@@ -163,7 +163,10 @@ export function BetaWall({ holds, steps, stepIndex, className }: Props) {
       <rect width={W} height={H} rx={18} fill="url(#tnuts)" />
       <rect x={0.5} y={0.5} width={W - 1} height={H - 1} rx={17.5} fill="none" stroke="rgba(255,255,255,0.08)" />
 
-      {/* holds — drawn as typed, coloured shapes (jug/crimp/sloper/…) */}
+      {/* holds — SHAPE = hold type (jug/crimp/…); COLOUR = route membership.
+          As in real climbing, every hold on the suggested route shares one
+          colour; off-route holds are neutral grey; the current target is
+          brightest and pulses. */}
       {holds.map((h) => {
         const isTarget = view.targets.has(h.id)
         const isHeld = view.current.has(h.id)
@@ -171,44 +174,23 @@ export function BetaWall({ holds, steps, stepIndex, className }: Props) {
         const route = h.kind !== 'off'
         const type = h.type ?? 'unknown'
 
-        // Off-route holds and not-yet-used holds are dimmed so the active line
-        // reads clearly; the current target is full-strength + pulsing.
-        const opacity = isTarget || isHeld ? 1 : wasUsed ? 0.85 : route ? 0.6 : 0.3
+        // Route colour (one colour for the whole suggested line). Off-route grey.
+        const routeColor = '#8b5cf6' // the app accent = "our route"
+        const color = route ? routeColor : '#4a5272'
 
-        // Unknown-type holds (e.g. suggested targets with no shape) fall back
-        // to the simple role-coloured ellipse.
-        if (type === 'unknown') {
-          const fill = isTarget ? '#a78bfa' : isHeld ? 'rgba(167,139,250,0.55)' : route ? '#343c58' : '#1d2336'
-          return (
-            <g key={h.id}>
-              {isTarget && (
-                <ellipse className="svg-pulse" cx={h.x} cy={h.y} rx={h.rx + 6} ry={h.ry + 6} fill="none" stroke="#a78bfa" strokeWidth={1.6} />
-              )}
-              <ellipse
-                cx={h.x}
-                cy={h.y}
-                rx={h.rx}
-                ry={h.ry}
-                transform={`rotate(${h.rot} ${h.x} ${h.y})`}
-                fill={fill}
-                stroke={isTarget ? '#ede9fe' : 'rgba(255,255,255,0.14)'}
-                strokeWidth={isTarget ? 1.8 : 1}
-                filter={isTarget ? 'url(#glow)' : undefined}
-              />
-            </g>
-          )
-        }
+        // Visibility: target brightest, route holds clear, off-route dimmer.
+        const opacity = isTarget ? 1 : isHeld ? 0.95 : wasUsed ? 0.85 : route ? 0.8 : 0.4
 
         return (
           <g key={h.id} filter={isTarget ? 'url(#glow)' : undefined}>
             <HoldShape
-              type={type}
+              type={type === 'unknown' ? 'jug' : type}
+              color={color}
               cx={h.x}
               cy={h.y}
               rx={h.rx}
               ry={h.ry}
               rot={h.rot}
-              color={h.color}
               opacity={opacity}
               highlighted={isTarget}
             />
