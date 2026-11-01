@@ -310,7 +310,8 @@ export async function betaFromPhoto(opts: {
     const res = await fetch('/api/holds', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ frame: dataUrl, prompt: 'climbing holds' }),
+      // "climbing holds on a bouldering wall" segments better than "climbing holds".
+      body: JSON.stringify({ frame: dataUrl, prompt: 'climbing holds on a bouldering wall' }),
       signal,
     })
     if (!res.ok) {
@@ -321,7 +322,9 @@ export async function betaFromPhoto(opts: {
           : `Hold detection service returned ${res.status}.`,
       )
     }
-    const data = (await res.json()) as { holds?: DetectedBox[] }
+    const data = (await res.json()) as { holds?: DetectedBox[]; count?: number; debug?: unknown }
+    // Surface how detection went so we can diagnose poor results in the console.
+    console.info('[ClimbIQ] hold detection:', { count: data.count ?? data.holds?.length ?? 0, debug: data.debug })
     boxes = (data.holds ?? []).filter((b) => b.w < 0.45 && b.h < 0.45).slice(0, 60)
   } catch (e) {
     if (e instanceof DOMException && e.name === 'AbortError') throw e
