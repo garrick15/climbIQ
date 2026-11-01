@@ -389,7 +389,89 @@ export function buildAnalysis(
     climberStats: climberSummary(obs.biomechanics, obs.detectionRate),
     holds,
     beta,
-    feedback: coach.feedback,
+    // Guarantee the Feedback tab is never empty: if the model returned no
+    // feedback (e.g. truncated output), derive honest items from the measured
+    // biomechanics so the climber always gets actionable notes.
+    feedback: coach.feedback.length > 0 ? coach.feedback : feedbackFromBiomechanics(obs),
     training: coach.training,
   }
+}
+
+/**
+ * Fallback feedback derived purely from measured biomechanics — used only when
+ * the AI returns none. Honest (based on real numbers), direct, and actionable.
+ */
+function feedbackFromBiomechanics(obs: MovementObservations): FeedbackItem[] {
+  const bio = obs.biomechanics
+  const out: FeedbackItem[] = []
+  const mid = obs.durationSec / 2
+
+  // Arm efficiency: lots of bent-arm time = pumped forearms.
+  if (obs.angleSummary.bentArmFraction > 0.4) {
+    out.push({
+      id: 'bm-arms',
+      kind: 'improve',
+      timestamp: mid,
+      title: 'Hang off straighter arms',
+      observation: 'You spent much of the climb with bent arms.',
+      why: 'Bent arms keep your forearms working and pump you out faster.',
+      tryThis: 'Between moves, drop your shoulders and let your arms go straight to rest.',
+      skill: 'Arm efficiency',
+    })
+  }
+
+  // Stability: weight off the base of support.
+  if (bio.comOutsideFraction > 0.4) {
+    out.push({
+      id: 'bm-balance',
+      kind: 'improve',
+      timestamp: mid,
+      title: 'Keep weight over your feet',
+      observation: 'Your centre of mass drifted off your base of support on several moves.',
+      why: 'When your weight is off your feet you swing and pull harder with your arms.',
+      tryThis: 'Set your feet and shift your hips over them before reaching.',
+      skill: 'Balance',
+    })
+  }
+
+  // Smoothness: lots of pauses / jerky movement.
+  if (obs.pauses.length >= 2) {
+    out.push({
+      id: 'bm-flow',
+      kind: 'improve',
+      timestamp: obs.pauses[0]?.startT ?? mid,
+      title: 'Climb more continuously',
+      observation: `You paused ${obs.pauses.length} times mid-route.`,
+      why: 'Long pauses on bad holds drain energy. Keep momentum between rests.',
+      tryThis: 'Plan two or three moves ahead so you flow between good holds.',
+      skill: 'Movement fluency',
+    })
+  }
+
+  // A genuine strength so it's not all criticism.
+  if (bio.comOutsideFraction <= 0.4) {
+    out.push({
+      id: 'bm-strength',
+      kind: 'strength',
+      timestamp: mid,
+      title: 'Balanced over your feet',
+      observation: 'You kept your weight over your base for most of the climb.',
+      why: 'That saves grip strength and makes reaches feel easier.',
+      skill: 'Balance',
+    })
+  }
+
+  // Always return at least one item.
+  if (out.length === 0) {
+    out.push({
+      id: 'bm-general',
+      kind: 'strength',
+      timestamp: mid,
+      title: 'Solid, controlled climbing',
+      observation: 'No major efficiency issues stood out in the movement data.',
+      why: 'Clean movement is the foundation to build harder climbing on.',
+      skill: 'Overall',
+    })
+  }
+  return out
 }
