@@ -88,12 +88,6 @@ export default function App() {
     window.scrollTo({ top: 0 })
   }
 
-  const startDemo = () => {
-    clear()
-    setView('processing')
-    window.scrollTo({ top: 0 })
-  }
-
   const onDone = useCallback((r: AnalyseResult) => {
     setAnalysis(r.analysis)
     setPoseTrack(r.poseTrack)
@@ -122,7 +116,6 @@ export default function App() {
             onSelect={select}
             onClear={clear}
             onAnalyse={startAnalysis}
-            onDemo={startDemo}
             onRunDemoVideo={runDemoVideo}
           />
         )}

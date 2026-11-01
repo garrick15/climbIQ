@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { DragEvent } from 'react'
-import { ArrowRight, Camera, CircleAlert, Film, MessageSquareText, PlayCircle, Route, Sparkles, Target, UploadCloud, X } from 'lucide-react'
+import { ArrowRight, Camera, CircleAlert, Film, MessageSquareText, PlayCircle, Route, Target, UploadCloud, X } from 'lucide-react'
 import { buildDemoAnalysis } from '../data/demo'
 import type { VideoMeta } from '../types'
 import { MAX_BYTES, formatBytes, formatTime } from '../lib/video'
@@ -15,7 +15,6 @@ interface Props {
   onSelect: (f: File) => void
   onClear: () => void
   onAnalyse: () => void
-  onDemo: () => void
   /** run the full real pipeline on the bundled demo clip (no file picker) */
   onRunDemoVideo: () => void
 }
@@ -32,7 +31,7 @@ const TIPS = [
   'Record the full attempt from the start holds to the top. 10 seconds to 3 minutes is ideal.',
 ]
 
-export function UploadView({ file, videoUrl, meta, error, onSelect, onClear, onAnalyse, onDemo, onRunDemoVideo }: Props) {
+export function UploadView({ file, videoUrl, meta, error, onSelect, onClear, onAnalyse, onRunDemoVideo }: Props) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [dragging, setDragging] = useState(false)
   const [previewFailed, setPreviewFailed] = useState(false)
@@ -97,18 +96,10 @@ export function UploadView({ file, videoUrl, meta, error, onSelect, onClear, onA
                   >
                     <Film className="h-4 w-4" aria-hidden /> Choose a video
                   </button>
-                  <button
-                    type="button"
-                    onClick={onDemo}
-                    className="inline-flex items-center gap-2 rounded-xl border bg-white/[0.04] px-5 py-2.5 text-sm font-medium text-slate-200 transition-colors hover:bg-white/[0.08]"
-                  >
-                    <Sparkles className="h-4 w-4 text-accent-300" aria-hidden /> Sample data
-                  </button>
                 </div>
                 <p className="mt-3 text-center text-xs text-slate-500">
                   <span className="font-medium text-slate-400">Run the demo climb</span> analyses a bundled clip live
-                  (real pose + AI coaching). <span className="font-medium text-slate-400">Sample data</span> shows the
-                  interface instantly with no video.
+                  (real pose + AI coaching), or choose your own video.
                 </p>
               </div>
             ) : (
