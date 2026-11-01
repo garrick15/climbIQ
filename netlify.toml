@@ -13,10 +13,14 @@
   # Functions call MediaPipe-free code but fetch an external API; give them room.
   node_bundler = "esbuild"
 
+# Give the model-calling functions the maximum synchronous budget. Netlify's
+# hard ceiling for sync functions is ~26s (the infra cuts the connection past
+# that), so 26 is the most we can ask for without background functions.
 [functions."coach"]
-  # The Meta call + model generation can take a while on longer observations.
-  # (Extended timeouts require a paid plan; this is a no-op on the free tier.)
-  timeout = 30
+  timeout = 26
+
+[functions."holds"]
+  timeout = 26
 
 # SPA fallback — serve index.html for client-side routes.
 # This is evaluated AFTER function routes, so /api/coach still hits the function.
