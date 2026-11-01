@@ -23,8 +23,7 @@ export function VisualBeta({ analysis, stepIndex, onStep, onSeek, followVideo }:
   if (beta.length === 0) {
     return (
       <Card className="p-6 text-center text-sm text-slate-400">
-        No suggested moves for this {analysis.source === 'ai' ? 'route' : 'climb'}. Try a clearer, straight-on photo
-        of the wall (or a side-on clip for a climb).
+        No suggested moves for this climb. Try a clearer, side-on clip with your whole body in frame.
       </Card>
     )
   }

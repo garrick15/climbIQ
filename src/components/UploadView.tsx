@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { DragEvent } from 'react'
-import { ArrowRight, Camera, CircleAlert, Film, Image as ImageIcon, MessageSquareText, Route, Sparkles, Target, UploadCloud, X } from 'lucide-react'
-import type { RefObject } from 'react'
+import { ArrowRight, Camera, CircleAlert, Film, MessageSquareText, Route, Sparkles, Target, UploadCloud, X } from 'lucide-react'
 import { buildDemoAnalysis } from '../data/demo'
 import type { VideoMeta } from '../types'
 import { MAX_BYTES, formatBytes, formatTime } from '../lib/video'
@@ -11,14 +10,11 @@ import { Card, Eyebrow, cx } from './ui'
 interface Props {
   file: File | null
   videoUrl?: string
-  photoUrl?: string
   meta: VideoMeta | null
   error: string | null
   onSelect: (f: File) => void
-  onSelectPhoto: (f: File) => void
   onClear: () => void
   onAnalyse: () => void
-  onPhotoBeta: (routeColor?: string) => void
   onDemo: () => void
 }
 
@@ -34,24 +30,10 @@ const TIPS = [
   'Record the full attempt from the start holds to the top. 10 seconds to 3 minutes is ideal.',
 ]
 
-export function UploadView({
-  file,
-  videoUrl,
-  photoUrl,
-  meta,
-  error,
-  onSelect,
-  onSelectPhoto,
-  onClear,
-  onAnalyse,
-  onPhotoBeta,
-  onDemo,
-}: Props) {
+export function UploadView({ file, videoUrl, meta, error, onSelect, onClear, onAnalyse, onDemo }: Props) {
   const inputRef = useRef<HTMLInputElement>(null)
-  const photoInputRef = useRef<HTMLInputElement>(null)
   const [dragging, setDragging] = useState(false)
   const [previewFailed, setPreviewFailed] = useState(false)
-  const [uploadMode, setUploadMode] = useState<'video' | 'photo'>('video')
 
   useEffect(() => setPreviewFailed(false), [videoUrl])
 
@@ -73,54 +55,10 @@ export function UploadView({
             See your climb the way a coach does.
           </h1>
           <p className="mt-5 max-w-xl text-base leading-relaxed text-slate-400">
-            {uploadMode === 'video'
-              ? 'Upload a recording of a boulder problem. ClimbIQ studies how you move, then shows you a better sequence, explains what to fix and tells you what to practise next.'
-              : 'Upload a photo of a bouldering wall. ClimbIQ detects the holds and suggests a climbing beta — a sequence to try, move by move.'}
+            Upload a recording of a boulder problem. ClimbIQ studies how you move, then shows you a better sequence,
+            explains what to fix and tells you what to practise next.
           </p>
 
-          {/* Mode toggle: analyse a climb (video) vs plan beta from a photo */}
-          <div className="mt-6 inline-flex rounded-xl border bg-ink-850 p-1" role="group" aria-label="What to upload">
-            {(
-              [
-                { id: 'video', icon: Film, label: 'Analyse my climb' },
-                { id: 'photo', icon: ImageIcon, label: 'Beta from a photo' },
-              ] as const
-            ).map(({ id, icon: Icon, label }) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => {
-                  if (id !== uploadMode) {
-                    setUploadMode(id)
-                    onClear()
-                  }
-                }}
-                aria-pressed={uploadMode === id}
-                className={cx(
-                  'inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors',
-                  uploadMode === id ? 'bg-accent-600 text-white' : 'text-slate-400 hover:text-slate-200',
-                )}
-              >
-                <Icon className="h-4 w-4" aria-hidden />
-                {label}
-              </button>
-            ))}
-          </div>
-
-          {/* Photo flow */}
-          {uploadMode === 'photo' ? (
-            <div className="mt-6">
-              <PhotoUpload
-                file={file}
-                photoUrl={photoUrl}
-                error={error}
-                inputRef={photoInputRef}
-                onSelectPhoto={onSelectPhoto}
-                onClear={onClear}
-                onPhotoBeta={onPhotoBeta}
-              />
-            </div>
-          ) : (
           <div className="mt-8">
             {!file ? (
               <div
@@ -272,7 +210,6 @@ export function UploadView({
               Your video stays in this browser tab. Nothing is uploaded anywhere yet.
             </p>
           </div>
-          )}
         </div>
 
         <HeroPreview />
@@ -310,136 +247,6 @@ export function UploadView({
     </div>
   )
 }
-
-/** Photo upload card: pick a wall photo, then get a suggested beta. */
-function PhotoUpload({
-  file,
-  photoUrl,
-  error,
-  inputRef,
-  onSelectPhoto,
-  onClear,
-  onPhotoBeta,
-}: {
-  file: File | null
-  photoUrl?: string
-  error: string | null
-  inputRef: RefObject<HTMLInputElement | null>
-  onSelectPhoto: (f: File) => void
-  onClear: () => void
-  onPhotoBeta: (routeColor?: string) => void
-}) {
-  const [dragging, setDragging] = useState(false)
-
-  return (
-    <div>
-      {!file ? (
-        <div
-          onDragOver={(e) => {
-            e.preventDefault()
-            setDragging(true)
-          }}
-          onDragLeave={() => setDragging(false)}
-          onDrop={(e) => {
-            e.preventDefault()
-            setDragging(false)
-            const f = e.dataTransfer.files?.[0]
-            if (f) onSelectPhoto(f)
-          }}
-          className={cx(
-            'group relative rounded-2xl border border-dashed p-8 text-center transition-colors sm:p-10',
-            dragging ? 'border-accent-400 bg-accent-500/10' : 'border-white/15 bg-ink-850/70 hover:border-accent-500/50',
-          )}
-        >
-          <span className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-accent-500/15 text-accent-300">
-            <ImageIcon className="h-7 w-7" aria-hidden />
-          </span>
-          <p className="mt-5 text-lg font-medium text-white">Drop a photo of the wall here</p>
-          <p className="mt-1 text-sm text-slate-500">JPG or PNG · a straight-on, well-lit shot works best</p>
-          <div className="mt-6">
-            <button
-              type="button"
-              onClick={() => inputRef.current?.click()}
-              className="inline-flex items-center gap-2 rounded-xl bg-accent-600 px-5 py-2.5 text-sm font-medium text-white shadow-[0_10px_30px_-10px_rgb(124_58_237/0.9)] transition-colors hover:bg-accent-500"
-            >
-              <ImageIcon className="h-4 w-4" aria-hidden /> Choose a photo
-            </button>
-          </div>
-        </div>
-      ) : (
-        <Card className="p-4 sm:p-5">
-          <div className="flex gap-4">
-            <div className="h-32 w-24 shrink-0 overflow-hidden rounded-xl bg-black">
-              {photoUrl && <img src={photoUrl} alt="" className="h-full w-full object-cover" />}
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-start justify-between gap-3">
-                <p className="truncate text-[15px] font-medium text-white" title={file.name}>
-                  {file.name}
-                </p>
-                <button
-                  type="button"
-                  onClick={onClear}
-                  aria-label="Remove photo"
-                  className="grid h-7 w-7 shrink-0 place-items-center rounded-lg text-slate-500 transition-colors hover:bg-white/[0.07] hover:text-slate-200"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-              <p className="mt-2 text-xs leading-relaxed text-slate-500">
-                ClimbIQ will detect the holds and suggest a beta. Hold detection is approximate, so treat the sequence
-                as a suggestion.
-              </p>
-            </div>
-          </div>
-          <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t pt-4">
-            <button
-              type="button"
-              onClick={() => inputRef.current?.click()}
-              className="text-sm font-medium text-slate-400 transition-colors hover:text-slate-200"
-            >
-              Choose a different photo
-            </button>
-            <button
-              type="button"
-              onClick={() => onPhotoBeta()}
-              className="inline-flex items-center gap-2 rounded-xl bg-accent-600 px-5 py-2.5 text-sm font-medium text-white shadow-[0_10px_30px_-10px_rgb(124_58_237/0.9)] transition-colors hover:bg-accent-500"
-            >
-              Suggest a beta <ArrowRight className="h-4 w-4" aria-hidden />
-            </button>
-          </div>
-        </Card>
-      )}
-
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/*,.jpg,.jpeg,.png,.webp"
-        className="sr-only"
-        tabIndex={-1}
-        aria-label="Upload wall photo"
-        onChange={(e) => {
-          const f = e.target.files?.[0]
-          if (f) onSelectPhoto(f)
-          e.target.value = ''
-        }}
-      />
-
-      {error && (
-        <p
-          role="alert"
-          className="mt-3 flex items-start gap-2 rounded-xl border border-red-400/25 bg-red-400/[0.08] px-3.5 py-3 text-sm text-red-200"
-        >
-          <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-          {error}
-        </p>
-      )}
-
-      <p className="mt-3 px-1 text-xs text-slate-500">Your photo stays in this browser tab.</p>
-    </div>
-  )
-}
-
 /** A small, self-playing example of the Visual Beta output. */
 function HeroPreview() {
   const analysis = useMemo(() => buildDemoAnalysis(), [])

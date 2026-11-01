@@ -32,7 +32,7 @@ export class ErrorBoundary extends Component<Props, State> {
           <h2 className="text-2xl font-semibold text-white">Something went wrong displaying this</h2>
           <p className="mt-3 text-sm leading-relaxed text-slate-400">
             The analysis finished, but we hit a snag rendering it. Your data is safe — try again, or start over with a
-            different clip or photo.
+            different clip.
           </p>
           <p className="mt-2 break-words font-mono text-xs text-slate-600">{this.state.error.message}</p>
           <button

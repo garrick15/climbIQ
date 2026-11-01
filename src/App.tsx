@@ -2,23 +2,16 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Header } from './components/Header'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { ProcessingView } from './components/ProcessingView'
-import { PhotoProcessingView } from './components/PhotoProcessingView'
 import { ResultsView } from './components/ResultsView'
 import { UploadView } from './components/UploadView'
 import { readVideoMeta, validateFile } from './lib/video'
 import type { AnalyseResult } from './lib/analyse'
-import type { PhotoBetaResult } from './lib/photo-beta'
 import type { Analysis, VideoMeta, View } from './types'
-
-type Mode = 'video' | 'photo'
 
 export default function App() {
   const [view, setView] = useState<View>('upload')
-  const [mode, setMode] = useState<Mode>('video')
   const [file, setFile] = useState<File | null>(null)
   const [videoUrl, setVideoUrl] = useState<string>()
-  const [photoUrl, setPhotoUrl] = useState<string>()
-  const [routeColor, setRouteColor] = useState<string | undefined>(undefined)
   const [meta, setMeta] = useState<VideoMeta | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [analysis, setAnalysis] = useState<Analysis | null>(null)
@@ -37,13 +30,10 @@ export default function App() {
     releaseUrl()
     setFile(null)
     setVideoUrl(undefined)
-    setPhotoUrl(undefined)
     setMeta(null)
     setError(null)
-    setRouteColor(undefined)
   }, [releaseUrl])
 
-  // Video selection (validates as a video + reads metadata).
   const select = useCallback(
     async (f: File) => {
       const problem = validateFile(f)
@@ -64,18 +54,6 @@ export default function App() {
     [releaseUrl],
   )
 
-  // Photo selection (image file).
-  const selectPhoto = useCallback((f: File) => {
-    if (!f.type.startsWith('image/')) {
-      setError('That is not an image. Please choose a JPG or PNG photo of the wall.')
-      return
-    }
-    setError(null)
-    setFile(f)
-    setPhotoUrl(URL.createObjectURL(f))
-    setMeta(null)
-  }, [])
-
   const reset = useCallback(() => {
     clear()
     setAnalysis(null)
@@ -86,21 +64,12 @@ export default function App() {
   }, [clear])
 
   const startAnalysis = () => {
-    setMode('video')
-    setView('processing')
-    window.scrollTo({ top: 0 })
-  }
-
-  const startPhotoBeta = (color?: string) => {
-    setMode('photo')
-    setRouteColor(color)
     setView('processing')
     window.scrollTo({ top: 0 })
   }
 
   const startDemo = () => {
     clear()
-    setMode('video')
     setView('processing')
     window.scrollTo({ top: 0 })
   }
@@ -108,15 +77,6 @@ export default function App() {
   const onDone = useCallback((r: AnalyseResult) => {
     setAnalysis(r.analysis)
     setPoseTrack(r.poseTrack)
-    setFallbackReason(r.usedFallback ? (r.fallbackReason ?? null) : null)
-    setView('results')
-    window.scrollTo({ top: 0 })
-  }, [])
-
-  const onPhotoDone = useCallback((r: PhotoBetaResult) => {
-    setAnalysis(r.analysis)
-    setPhotoUrl(r.imageUrl)
-    setPoseTrack(undefined)
     setFallbackReason(r.usedFallback ? (r.fallbackReason ?? null) : null)
     setView('results')
     window.scrollTo({ top: 0 })
@@ -137,19 +97,16 @@ export default function App() {
           <UploadView
             file={file}
             videoUrl={videoUrl}
-            photoUrl={photoUrl}
             meta={meta}
             error={error}
             onSelect={select}
-            onSelectPhoto={selectPhoto}
             onClear={clear}
             onAnalyse={startAnalysis}
-            onPhotoBeta={startPhotoBeta}
             onDemo={startDemo}
           />
         )}
 
-        {view === 'processing' && mode === 'video' && (
+        {view === 'processing' && (
           <ProcessingView
             file={file ?? undefined}
             videoUrl={videoUrl}
@@ -159,16 +116,11 @@ export default function App() {
           />
         )}
 
-        {view === 'processing' && mode === 'photo' && file && (
-          <PhotoProcessingView file={file} routeColor={routeColor} onDone={onPhotoDone} onCancel={reset} />
-        )}
-
         {view === 'results' && analysis && (
           <ErrorBoundary onReset={reset}>
             <ResultsView
               analysis={analysis}
-              videoUrl={mode === 'video' ? videoUrl : undefined}
-              photoUrl={mode === 'photo' ? photoUrl : undefined}
+              videoUrl={videoUrl}
               fileName={file?.name}
               fallbackReason={fallbackReason}
               poseTrack={poseTrack}
