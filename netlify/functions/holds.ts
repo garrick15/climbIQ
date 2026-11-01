@@ -144,16 +144,14 @@ export default async function handler(req: Request, _ctx: Context): Promise<Resp
   const data = await upstream.json()
 
   // SAM 3.1 returns segmentation as a special-token grammar in the output-text
-  // lane. The official decoder is @meta-sam/parser — use it when available.
-  let boxes = await parseWithMetaSam(data)
-  let parsedBy = boxes.length ? 'meta-sam-parser' : 'none'
+  // lane. We decode it heuristically (JSON objects first, then numbers in the
+  // output text). The `debug` block below exposes the real shape so the parser
+  // can be made exact once we see a live response.
+  let parsedBy = 'none'
+  let boxes = extractBoxes(data, 1, 1)
+  if (boxes.length) parsedBy = 'json-walk'
 
-  // Fallbacks when the official parser isn't available or found nothing.
   const outputText = collectOutputText(data)
-  if (boxes.length === 0) {
-    boxes = extractBoxes(data, 1, 1)
-    if (boxes.length) parsedBy = 'json-walk'
-  }
   if (boxes.length === 0 && outputText) {
     boxes = extractBoxesFromText(outputText)
     if (boxes.length) parsedBy = 'text-regex'
@@ -167,41 +165,6 @@ export default async function handler(req: Request, _ctx: Context): Promise<Resp
   }
 
   return json({ holds: boxes, count: boxes.length, debug })
-}
-
-/**
- * Decode SAM output with the official @meta-sam/parser when present. The exact
- * export surface isn't pinned here, so we probe a few likely shapes and read
- * boxes off whatever snapshot/records the parser returns. Returns [] on any
- * mismatch so the heuristic fallbacks can take over.
- */
-async function parseWithMetaSam(data: unknown): Promise<DetectedBox[]> {
-  try {
-    const mod: Record<string, unknown> = await import('@meta-sam/parser').catch(() => ({}) as never)
-    if (!mod || Object.keys(mod).length === 0) return []
-
-    // Try common entry points: parse(data) / decode(data) / new Parser().
-    const candidates = ['parse', 'parseResponse', 'decode', 'parseImage', 'fromResponse']
-    let result: unknown = null
-    for (const name of candidates) {
-      const fn = mod[name]
-      if (typeof fn === 'function') {
-        try {
-          result = (fn as (x: unknown) => unknown)(data)
-          if (result) break
-        } catch {
-          /* try next */
-        }
-      }
-    }
-    if (!result) return []
-
-    // Walk the parser result for objects/arrays carrying a box.
-    const boxes = extractBoxes(result, 1, 1)
-    return boxes
-  } catch {
-    return []
-  }
 }
 
 /** Pull any text the model emitted from a Responses payload. */
