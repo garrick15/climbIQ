@@ -96,6 +96,15 @@ async function assetExists(url: string): Promise<boolean> {
 
 let landmarkerPromise: Promise<PoseLandmarker> | null = null
 
+// Monotonic timestamp base shared across the session, so detection timestamps
+// are always strictly increasing even across multiple analyses that reuse the
+// same landmarker graph (MediaPipe VIDEO mode rejects non-increasing stamps).
+let timestampCursor = 0
+function nextTimestampBase(): number {
+  timestampCursor += 100_000 // leave a big gap between runs
+  return timestampCursor
+}
+
 /** Lazily create a single PoseLandmarker configured for VIDEO mode. */
 async function getLandmarker(): Promise<PoseLandmarker> {
   if (!landmarkerPromise) {
@@ -309,14 +318,20 @@ export async function estimatePose(
     const frames: PoseFrame[] = []
     let detected = 0
 
+    // VIDEO mode requires STRICTLY increasing timestamps. We use a dedicated
+    // monotonic counter (not the video's own time) so frames never collide or
+    // go backwards — even if two sampled times round to the same ms, or the
+    // same landmarker instance was used by a previous analysis.
+    let ts = nextTimestampBase()
+
     for (let i = 0; i < count; i++) {
       if (signal.aborted) throw new DOMException('Aborted', 'AbortError')
       const t = Math.min(duration - 0.001, i * step + step / 2)
       await seekTo(video, t, signal)
       ctx.drawImage(video, 0, 0, width, height)
 
-      // VIDEO mode needs a monotonically increasing timestamp in ms.
-      const result = landmarker.detectForVideo(canvas, Math.round(t * 1000))
+      ts += 50 // ms; any strictly-increasing step works
+      const result = landmarker.detectForVideo(canvas, ts)
       const lm = result.landmarks?.[0] ?? null
       if (lm) detected++
 

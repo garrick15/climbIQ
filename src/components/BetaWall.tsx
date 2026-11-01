@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import type { BetaStep, Hold, Limb, Point } from '../types'
 import { LIMB_LABEL, LIMBS, arcPath, buildPose, holdMap, movedLimbs, resolveTarget } from '../lib/pose'
 import type { Pose } from '../lib/pose'
+import { HoldShape } from './HoldShape'
 
 const W = 360
 const H = 540
@@ -92,10 +93,13 @@ function CueLabel({ text, hip }: { text: string; hip: Point }) {
 }
 
 export function BetaWall({ holds, steps, stepIndex, className }: Props) {
-  const step = steps[stepIndex]
-  const prev = stepIndex > 0 ? steps[stepIndex - 1] : undefined
+  // Clamp so an out-of-range index (or empty steps) can never read undefined.
+  const safeIndex = Math.min(Math.max(0, stepIndex), Math.max(0, steps.length - 1))
+  const step: BetaStep | undefined = steps[safeIndex]
+  const prev = safeIndex > 0 ? steps[safeIndex - 1] : undefined
 
   const view = useMemo(() => {
+    if (!step) return null
     const map = holdMap(holds)
     const pose = buildPose(step.limbs, holds, step.hipShift)
     const ghost = prev ? buildPose(prev.limbs, holds, prev.hipShift) : null
@@ -103,9 +107,11 @@ export function BetaWall({ holds, steps, stepIndex, className }: Props) {
 
     // holds that have been used up to and including this step
     const used = new Set<string>()
-    for (let i = 0; i <= stepIndex; i++) {
+    for (let i = 0; i <= safeIndex; i++) {
+      const si = steps[i]
+      if (!si) continue
       for (const l of LIMBS) {
-        const t = steps[i].limbs[l]
+        const t = si.limbs[l]
         if (typeof t === 'string') used.add(t)
       }
     }
@@ -115,7 +121,7 @@ export function BetaWall({ holds, steps, stepIndex, className }: Props) {
       const t = step.limbs[l]
       if (typeof t === 'string') {
         current.add(t)
-        if (moved.includes(l) || stepIndex === 0) targets.set(t, l)
+        if (moved.includes(l) || safeIndex === 0) targets.set(t, l)
       }
     }
     const arrows = moved.map((l) => ({
@@ -129,14 +135,23 @@ export function BetaWall({ holds, steps, stepIndex, className }: Props) {
         : null
 
     return { pose, ghost, used, current, targets, arrows, hipMove }
-  }, [holds, step, prev, steps, stepIndex])
+  }, [holds, step, prev, steps, safeIndex])
+
+  // Empty/invalid steps: render just the wall so nothing crashes.
+  if (!step || !view) {
+    return (
+      <svg viewBox={`0 0 ${W} ${H}`} className={className} role="img" aria-label="Wall diagram">
+        <rect width={W} height={H} rx={18} fill="#0d111d" />
+      </svg>
+    )
+  }
 
   return (
     <svg
       viewBox={`0 0 ${W} ${H}`}
       className={className}
       role="img"
-      aria-label={`Wall diagram for move ${stepIndex + 1}: ${step.title}`}
+      aria-label={`Wall diagram for move ${safeIndex + 1}: ${step.title}`}
     >
       <defs>
         <linearGradient id="wall" x1="0" y1="0" x2="0" y2="1">
@@ -162,46 +177,36 @@ export function BetaWall({ holds, steps, stepIndex, className }: Props) {
       <rect width={W} height={H} rx={18} fill="url(#tnuts)" />
       <rect x={0.5} y={0.5} width={W - 1} height={H - 1} rx={17.5} fill="none" stroke="rgba(255,255,255,0.08)" />
 
-      {/* holds */}
+      {/* holds — SHAPE = hold type (jug/crimp/…); COLOUR = route membership.
+          As in real climbing, every hold on the suggested route shares one
+          colour; off-route holds are neutral grey; the current target is
+          brightest and pulses. */}
       {holds.map((h) => {
         const isTarget = view.targets.has(h.id)
         const isHeld = view.current.has(h.id)
         const wasUsed = view.used.has(h.id)
         const route = h.kind !== 'off'
-        const fill = isTarget
-          ? '#a78bfa'
-          : isHeld
-            ? 'rgba(167,139,250,0.55)'
-            : wasUsed
-              ? '#4a5272'
-              : route
-                ? '#343c58'
-                : '#1d2336'
-        const stroke = isTarget ? '#ede9fe' : route ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.07)'
+        const type = h.type ?? 'unknown'
+
+        // Route colour (one colour for the whole suggested line). Off-route grey.
+        const routeColor = '#8b5cf6' // the app accent = "our route"
+        const color = route ? routeColor : '#4a5272'
+
+        // Visibility: target brightest, route holds clear, off-route dimmer.
+        const opacity = isTarget ? 1 : isHeld ? 0.95 : wasUsed ? 0.85 : route ? 0.8 : 0.4
+
         return (
-          <g key={h.id}>
-            {isTarget && (
-              <ellipse
-                className="svg-pulse"
-                cx={h.x}
-                cy={h.y}
-                rx={h.rx + 6}
-                ry={h.ry + 6}
-                fill="none"
-                stroke="#a78bfa"
-                strokeWidth={1.6}
-              />
-            )}
-            <ellipse
+          <g key={h.id} filter={isTarget ? 'url(#glow)' : undefined}>
+            <HoldShape
+              type={type === 'unknown' ? 'jug' : type}
+              color={color}
               cx={h.x}
               cy={h.y}
               rx={h.rx}
               ry={h.ry}
-              transform={`rotate(${h.rot} ${h.x} ${h.y})`}
-              fill={fill}
-              stroke={stroke}
-              strokeWidth={isTarget ? 1.8 : 1}
-              filter={isTarget ? 'url(#glow)' : undefined}
+              rot={h.rot}
+              opacity={opacity}
+              highlighted={isTarget}
             />
           </g>
         )

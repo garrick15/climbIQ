@@ -142,11 +142,81 @@ export default async function handler(req: Request, _ctx: Context): Promise<Resp
   }
 
   const data = await upstream.json()
-  // Frame dimensions are unknown server-side; boxes are returned normalised
-  // where possible. Pass 1,1 so the pixel-heuristic leaves 0–1 values intact.
-  const boxes = extractBoxes(data, 1, 1)
 
-  return json({ holds: boxes, count: boxes.length })
+  // SAM 3.1 returns segmentation as a special-token grammar in the output-text
+  // lane. We decode it heuristically (JSON objects first, then numbers in the
+  // output text). The `debug` block below exposes the real shape so the parser
+  // can be made exact once we see a live response.
+  let parsedBy = 'none'
+  let boxes = extractBoxes(data, 1, 1)
+  if (boxes.length) parsedBy = 'json-walk'
+
+  const outputText = collectOutputText(data)
+  if (boxes.length === 0 && outputText) {
+    boxes = extractBoxesFromText(outputText)
+    if (boxes.length) parsedBy = 'text-regex'
+  }
+
+  const debug = {
+    parsedBy,
+    topKeys: data && typeof data === 'object' ? Object.keys(data as object).slice(0, 12) : [],
+    outputTextSample: outputText.slice(0, 600),
+    rawSample: JSON.stringify(data).slice(0, 800),
+  }
+
+  return json({ holds: boxes, count: boxes.length, debug })
+}
+
+/** Pull any text the model emitted from a Responses payload. */
+function collectOutputText(payload: unknown): string {
+  let text = ''
+  const visit = (node: unknown) => {
+    if (!node) return
+    if (typeof node === 'string') return
+    if (Array.isArray(node)) {
+      node.forEach(visit)
+      return
+    }
+    if (typeof node === 'object') {
+      const o = node as Record<string, unknown>
+      if (typeof o.output_text === 'string') text += o.output_text + '\n'
+      if (o.type === 'output_text' && typeof o.text === 'string') text += o.text + '\n'
+      if (typeof o.text === 'string' && o.type !== 'input_text') text += o.text + '\n'
+      for (const v of Object.values(o)) visit(v)
+    }
+  }
+  visit(payload)
+  return text
+}
+
+/**
+ * Parse boxes from SAM's text output. Looks for groups of 4 numbers that read
+ * as a box (normalised 0–1 or pixel). Tolerant of several separators/formats.
+ */
+function extractBoxesFromText(text: string): DetectedBox[] {
+  const out: DetectedBox[] = []
+  // Match 4 numbers in a row, e.g. "0.12 0.34 0.08 0.05" or "[12,34,20,18]".
+  const re = /(-?\d*\.?\d+)[,\s]+(-?\d*\.?\d+)[,\s]+(-?\d*\.?\d+)[,\s]+(-?\d*\.?\d+)/g
+  let m: RegExpExecArray | null
+  while ((m = re.exec(text))) {
+    const nums = [m[1], m[2], m[3], m[4]].map(Number)
+    if (nums.some((n) => !Number.isFinite(n))) continue
+    const [x, y, c, d] = nums
+    const looksPixel = nums.some((n) => n > 1.5)
+    // Assume xywh unless the 3rd/4th look like a bottom-right corner.
+    const isXYXY = c > x && d > y && (looksPixel ? c > x + 2 : c <= 1.01 && d <= 1.01)
+    const w = isXYXY ? c - x : c
+    const h = isXYXY ? d - y : d
+    const scale = looksPixel ? 1000 : 1 // rough; client renders normalised anyway
+    const nx = looksPixel ? x / scale : x
+    const ny = looksPixel ? y / scale : y
+    const nw = looksPixel ? w / scale : w
+    const nh = looksPixel ? h / scale : h
+    if (nw > 0 && nh > 0 && nw < 1 && nh < 1) {
+      out.push({ x: clamp01(nx), y: clamp01(ny), w: clamp01(nw), h: clamp01(nh) })
+    }
+  }
+  return out
 }
 
 export const config: Config = { path: '/api/holds' }

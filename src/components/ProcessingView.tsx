@@ -43,7 +43,7 @@ export function ProcessingView({ file, videoUrl, durationSec, onDone, onCancel }
   const overall = Math.min(100, Math.round(((stage + fraction) / PIPELINE.length) * 100))
 
   return (
-    <div className="animate-fade-up mx-auto grid max-w-5xl items-center gap-8 pt-6 md:grid-cols-[1fr_340px] md:pt-12">
+    <div className="animate-fade-up mx-auto grid min-h-[70vh] max-w-5xl content-center items-center gap-8 md:grid-cols-[1fr_minmax(0,340px)]">
       <div>
         <Eyebrow>Analysing</Eyebrow>
         <h1 className="mt-3 text-4xl font-semibold tracking-tight text-white">Watching your climb</h1>

@@ -14,6 +14,7 @@ import type { PoseTrack } from './pose-estimation'
 import type { MovementObservations } from './movement'
 import { nearestHold } from './holds'
 import type { HoldDetection } from './holds'
+import { climberSummary } from './climberMetrics'
 import type {
   Analysis,
   BetaStep,
@@ -188,35 +189,81 @@ function normaliseCoach(raw: unknown, obs: MovementObservations): CoachOutput {
   const c = (raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}) as Record<string, unknown>
   const climb = (c.climb && typeof c.climb === 'object' ? (c.climb as Record<string, unknown>) : {}) as Record<string, unknown>
 
+  const MOVE_LIMBS = ['lh', 'rh', 'lf', 'rf']
+  const RATINGS = ['best', 'good', 'inaccuracy', 'mistake']
   const beta = asArray<Record<string, unknown>>(c.beta).map((s, i) => ({
     id: asStr(s.id) || `step-${i + 1}`,
     title: asStr(s.title, `Move ${i + 1}`),
-    summary: asStr(s.summary),
+    summary: asStr(s.summary) || asStr(s.instruction),
     bodyPosition: asStr(s.bodyPosition),
-    why: asStr(s.why),
+    why: asStr(s.why) || asStr(s.reason),
     yourAttempt: asStr(s.yourAttempt),
     timestamp: asNum(s.timestamp, (i / Math.max(1, asArray(c.beta).length)) * obs.durationSec),
     crux: typeof s.crux === 'boolean' ? s.crux : undefined,
+    // chess.com-style coaching fields
+    instruction: asStr(s.instruction) || asStr(s.summary),
+    moveLimb: MOVE_LIMBS.includes(asStr(s.moveLimb)) ? (asStr(s.moveLimb) as 'lh' | 'rh' | 'lf' | 'rf') : undefined,
+    rating: RATINGS.includes(asStr(s.rating)) ? (asStr(s.rating) as 'best' | 'good' | 'inaccuracy' | 'mistake') : undefined,
+    reason: asStr(s.reason) || asStr(s.why),
+    // rich coach-panel fields (with safe fallbacks so the panel is never empty)
+    moveSteps: asArray<unknown>(s.moveSteps)
+      .map((x) => (typeof x === 'string' ? x : ''))
+      .filter(Boolean),
+    attemptIssues: asArray<unknown>(s.attemptIssues)
+      .map((x) => (typeof x === 'string' ? x : ''))
+      .filter(Boolean),
+    recommendedWins: asArray<unknown>(s.recommendedWins)
+      .map((x) => (typeof x === 'string' ? x : ''))
+      .filter(Boolean),
+    coachNote: asStr(s.coachNote) || asStr(s.yourAttempt),
+    successRate: Number.isFinite(asNum(s.successRate, NaN))
+      ? Math.round(Math.min(100, Math.max(0, asNum(s.successRate, 0))))
+      : undefined,
   }))
 
-  const metrics = asArray<Record<string, unknown>>(c.metrics).map((m, i) => ({
-    id: asStr(m.id) || `m-${i}`,
-    label: asStr(m.label, 'Metric'),
-    value: Math.min(100, Math.max(0, asNum(m.value, 0))),
-    note: asStr(m.note),
-  }))
+  // The model sometimes names these fields differently (name/score/…), so
+  // accept common aliases and parse numeric strings like "72" or "72%".
+  const firstStr = (...vals: unknown[]): string => {
+    for (const v of vals) if (typeof v === 'string' && v.trim()) return v.trim()
+    return ''
+  }
+  const firstNum = (...vals: unknown[]): number => {
+    for (const v of vals) {
+      if (typeof v === 'number' && Number.isFinite(v)) return v
+      if (typeof v === 'string') {
+        const parsed = parseFloat(v.replace(/[^0-9.\-]/g, ''))
+        if (Number.isFinite(parsed)) return parsed
+      }
+    }
+    return NaN
+  }
+  const metrics = asArray<Record<string, unknown>>(c.metrics).map((m, i) => {
+    const raw = firstNum(m.value, m.score, m.rating, m.percent, m.val)
+    // Some models return 0–1 instead of 0–100.
+    const scaled = Number.isFinite(raw) ? (raw > 0 && raw <= 1 ? raw * 100 : raw) : 0
+    return {
+      id: asStr(m.id) || `m-${i}`,
+      label: firstStr(m.label, m.name, m.title, m.skill, m.metric) || `Metric ${i + 1}`,
+      value: Math.round(Math.min(100, Math.max(0, scaled))),
+      note: firstStr(m.note, m.detail, m.description, m.comment),
+    }
+  })
 
-  const feedback = asArray<Record<string, unknown>>(c.feedback).map((f, i) => ({
-    id: asStr(f.id) || `fb-${i}`,
-    kind: f.kind === 'strength' ? ('strength' as const) : ('improve' as const),
-    timestamp: asNum(f.timestamp, 0),
-    title: asStr(f.title, 'Note'),
-    observation: asStr(f.observation),
-    why: asStr(f.why),
-    tryThis: typeof f.tryThis === 'string' ? f.tryThis : undefined,
-    skill: asStr(f.skill, 'General'),
-    stepId: typeof f.stepId === 'string' ? f.stepId : undefined,
-  }))
+  const feedback = asArray<Record<string, unknown>>(c.feedback)
+    .map((f, i) => ({
+      id: asStr(f.id) || `fb-${i}`,
+      kind: f.kind === 'strength' ? ('strength' as const) : ('improve' as const),
+      timestamp: asNum(f.timestamp, 0),
+      title: asStr(f.title),
+      observation: asStr(f.observation),
+      why: asStr(f.why),
+      tryThis: typeof f.tryThis === 'string' ? f.tryThis : undefined,
+      skill: asStr(f.skill, 'General'),
+      stepId: typeof f.stepId === 'string' ? f.stepId : undefined,
+    }))
+    // Drop empty/blank items so the UI never shows a hollow "Note / Why it matters:".
+    .filter((f) => f.title.trim() || f.observation.trim())
+    .map((f) => ({ ...f, title: f.title || 'Observation' }))
 
   const training = asArray<Record<string, unknown>>(c.training).map((t, i) => ({
     id: asStr(t.id) || `tr-${i}`,
@@ -339,6 +386,7 @@ export function buildAnalysis(
       holdsDetected: hasDetection ? holds.length : 0,
     },
     metrics: coach.metrics,
+    climberStats: climberSummary(obs.biomechanics, obs.detectionRate),
     holds,
     beta,
     feedback: coach.feedback,

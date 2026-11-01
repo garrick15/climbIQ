@@ -1,6 +1,26 @@
 export type Limb = 'lh' | 'rh' | 'lf' | 'rf'
 
+/** Role of a hold on the suggested route. */
 export type HoldKind = 'start' | 'hand' | 'foot' | 'finish' | 'off'
+
+/**
+ * Physical hold type (what the hold IS). Estimated from detected geometry —
+ * SAM 3.1 segments holds but does not classify them, so `type` is a heuristic
+ * guess from box shape/size and is labelled "estimated" in the UI.
+ */
+export type HoldType =
+  | 'jug'
+  | 'crimp'
+  | 'sloper'
+  | 'pinch'
+  | 'pocket'
+  | 'edge'
+  | 'sidepull'
+  | 'gaston'
+  | 'undercling'
+  | 'foothold'
+  | 'volume'
+  | 'unknown'
 
 export interface Point {
   x: number
@@ -15,11 +35,37 @@ export interface Hold extends Point {
   rx: number
   ry: number
   rot: number
+  /**
+   * Estimated physical hold TYPE → drives the rendered SHAPE (jug, crimp,
+   * sloper…). Shape identifies what kind of hold it is.
+   */
+  type?: HoldType
+  /**
+   * The hold's physical COLOUR on the wall (hex), sampled from the frame.
+   * In real climbing, colour identifies which ROUTE a hold belongs to — so
+   * this is what the planned "I climbed the red route" feature filters on.
+   * It is NOT the render accent (route membership is drawn with the app accent).
+   */
+  color?: string
+  /** coarse colour-name bucket of `color`, for route grouping/filtering */
+  routeColor?: string
 }
 
 /** A limb is either on a hold (by id) or at a free point (flag / smear). */
 export type LimbTarget = string | Point
 export type LimbState = Record<Limb, LimbTarget>
+
+/**
+ * Chess.com-style verdict on how the climber played this move.
+ *   best        — the strong, efficient option
+ *   good        — solid
+ *   inaccuracy  — worked but cost energy/position
+ *   mistake     — a real error that made the climb harder
+ */
+export type MoveRating = 'best' | 'good' | 'inaccuracy' | 'mistake'
+
+/** Which limb performs the move, for a direct "do this" instruction. */
+export type MoveLimb = 'lh' | 'rh' | 'lf' | 'rf'
 
 export interface BetaStep {
   id: string
@@ -38,6 +84,26 @@ export interface BetaStep {
   hipShift: number
   cue: { text: string; side: 'left' | 'right' }
   crux?: boolean
+
+  // ── Chess.com-style coaching (the "coach, not detector" layer) ──────────
+  /** the single clear instruction for this move, e.g. "Right hand to the sloper" */
+  instruction?: string
+  /** which limb makes the move (drives the action card + arrow emphasis) */
+  moveLimb?: MoveLimb
+  /** short verdict on the climber's execution of this move */
+  rating?: MoveRating
+  /** one-line reason the recommended move is right (the "why") */
+  reason?: string
+  /** 2-4 ordered micro-steps to execute the move (coach panel) */
+  moveSteps?: string[]
+  /** what the climber did wrong/right, phrased as a coach note */
+  coachNote?: string
+  /** bullet points of what went wrong in the attempt */
+  attemptIssues?: string[]
+  /** bullet points of what the recommended move gets right */
+  recommendedWins?: string[]
+  /** estimated success likelihood of the recommended move, 0-100 */
+  successRate?: number
 }
 
 export type FeedbackKind = 'strength' | 'improve'
@@ -83,6 +149,15 @@ export interface Metric {
   note: string
 }
 
+/** A climber-friendly readout (Confidence, Stability, Balance, Body position). */
+export interface ClimberStat {
+  id: string
+  label: string
+  value: string
+  level: 'good' | 'ok' | 'warn'
+  hint: string
+}
+
 /** Where an analysis came from, so the UI can be honest about it. */
 export type AnalysisSource = 'demo' | 'ai'
 
@@ -106,6 +181,8 @@ export interface Analysis {
     holdsDetected: number
   }
   metrics: Metric[]
+  /** climber-friendly readouts (confidence, stability, balance, position) */
+  climberStats?: ClimberStat[]
   holds: Hold[]
   beta: BetaStep[]
   feedback: FeedbackItem[]

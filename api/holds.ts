@@ -111,6 +111,59 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
   }
 
   const data = await upstream.json()
-  const boxes = extractBoxes(data, 1, 1)
-  res.status(200).json({ holds: boxes, count: boxes.length })
+  let boxes = extractBoxes(data, 1, 1)
+  let parsedBy = boxes.length ? 'json-walk' : 'none'
+  const outputText = collectOutputText(data)
+  if (boxes.length === 0 && outputText) {
+    boxes = extractBoxesFromText(outputText)
+    if (boxes.length) parsedBy = 'text-regex'
+  }
+  res.status(200).json({
+    holds: boxes,
+    count: boxes.length,
+    debug: { parsedBy, outputTextSample: outputText.slice(0, 600), rawSample: JSON.stringify(data).slice(0, 800) },
+  })
+}
+
+function collectOutputText(payload: unknown): string {
+  let text = ''
+  const visit = (node: unknown) => {
+    if (!node || typeof node === 'string') return
+    if (Array.isArray(node)) {
+      node.forEach(visit)
+      return
+    }
+    if (typeof node === 'object') {
+      const o = node as Record<string, unknown>
+      if (typeof o.output_text === 'string') text += o.output_text + '\n'
+      if (o.type === 'output_text' && typeof o.text === 'string') text += o.text + '\n'
+      if (typeof o.text === 'string' && o.type !== 'input_text') text += o.text + '\n'
+      for (const v of Object.values(o)) visit(v)
+    }
+  }
+  visit(payload)
+  return text
+}
+
+function extractBoxesFromText(text: string): DetectedBox[] {
+  const out: DetectedBox[] = []
+  const re = /(-?\d*\.?\d+)[,\s]+(-?\d*\.?\d+)[,\s]+(-?\d*\.?\d+)[,\s]+(-?\d*\.?\d+)/g
+  let m: RegExpExecArray | null
+  while ((m = re.exec(text))) {
+    const nums = [m[1], m[2], m[3], m[4]].map(Number)
+    if (nums.some((n) => !Number.isFinite(n))) continue
+    const [x, y, c, d] = nums
+    const looksPixel = nums.some((n) => n > 1.5)
+    const isXYXY = c > x && d > y && (looksPixel ? c > x + 2 : c <= 1.01 && d <= 1.01)
+    const w = isXYXY ? c - x : c
+    const h = isXYXY ? d - y : d
+    const nx = looksPixel ? x / 1000 : x
+    const ny = looksPixel ? y / 1000 : y
+    const nw = looksPixel ? w / 1000 : w
+    const nh = looksPixel ? h / 1000 : h
+    if (nw > 0 && nh > 0 && nw < 1 && nh < 1) {
+      out.push({ x: clamp01(nx), y: clamp01(ny), w: clamp01(nw), h: clamp01(nh) })
+    }
+  }
+  return out
 }

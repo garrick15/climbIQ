@@ -11,7 +11,9 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { POSE_CONNECTIONS } from '../lib/pose-estimation'
 import type { LiveFrame } from '../lib/pose-estimation'
-import { frameMetrics } from '../lib/movement'
+import { bioFrame } from '../lib/biomechanics'
+import { climberFrameReadout } from '../lib/climberMetrics'
+import type { Level } from '../lib/climberMetrics'
 import { cx } from './ui'
 
 interface Props {
@@ -55,18 +57,18 @@ export function LiveAnalysisView({ frame }: Props) {
   const lm = frame?.landmarks ?? null
   const pts = lm && box.width ? lm.map((l) => fit(l.x, l.y, video, box)) : null
 
-  // Real per-frame metrics from the measured landmarks.
-  const metrics =
-    frame && lm
-      ? frameMetrics({ t: frame.t, landmarks: lm, visibility: frame.visibility })
-      : null
-  const angles = metrics?.angles ?? null
-  const com = metrics?.com ?? null
+  // Real per-frame biomechanics from the measured landmarks.
+  const bio = frame && lm ? bioFrame({ t: frame.t, landmarks: lm, visibility: frame.visibility }) : null
+  const angles = bio?.angles ?? null
+  const com = bio?.com ?? null
 
   const meanVisibility =
     frame?.visibility && frame.visibility.length
       ? frame.visibility.reduce((a, b) => a + b, 0) / frame.visibility.length
       : 0
+
+  // Climber-friendly readout for this frame (confidence/stability/COM/balance).
+  const readout = climberFrameReadout(bio, meanVisibility)
 
   // Bounding box in display pixels.
   const bb =
@@ -82,7 +84,7 @@ export function LiveAnalysisView({ frame }: Props) {
     <div className="w-full">
       <div
         ref={stageRef}
-        className="relative mx-auto aspect-[3/4] w-full max-w-[360px] overflow-hidden rounded-[18px] border border-white/10 bg-black shadow-[0_24px_60px_-24px_rgb(0_0_0/0.8)]"
+        className="relative mx-auto aspect-[3/4] h-[46vh] max-h-[460px] overflow-hidden rounded-[18px] border border-white/10 bg-black shadow-[0_24px_60px_-24px_rgb(0_0_0/0.8)]"
       >
         {frame?.image ? (
           <img src={frame.image} alt="" aria-hidden className="absolute inset-0 h-full w-full object-contain" />
@@ -184,20 +186,23 @@ export function LiveAnalysisView({ frame }: Props) {
         )}
       </div>
 
-      {/* Live stats readout */}
-      <div className="mx-auto mt-3 grid max-w-[360px] grid-cols-3 gap-2">
+      {/* Climber-friendly readout (what a climber cares about) */}
+      <div className="mx-auto mt-3 grid max-w-[360px] grid-cols-2 gap-2 sm:grid-cols-4">
+        <LevelStat label="Confidence" value={readout.confidence.value} level={readout.confidence.level} />
+        <LevelStat label="Stability" value={readout.stability.value} level={readout.stability.level} />
+        <LevelStat label="Centre of mass" value={readout.com.value} level={readout.com.level} />
+        <LevelStat label="Balance" value={readout.balance.value} level={readout.balance.level} />
+      </div>
+
+      {/* Technical detail (secondary) */}
+      <div className="mx-auto mt-2 grid max-w-[360px] grid-cols-4 gap-2">
         <Stat label="L elbow" value={deg(angles?.leftElbow ?? NaN)} />
         <Stat label="R elbow" value={deg(angles?.rightElbow ?? NaN)} />
-        <Stat label="Confidence" value={frame?.landmarks ? `${Math.round(meanVisibility * 100)}%` : '—'} highlight />
-        <Stat label="L knee" value={deg(angles?.leftKnee ?? NaN)} />
-        <Stat label="R knee" value={deg(angles?.rightKnee ?? NaN)} />
-        <Stat
-          label="Approx COM"
-          value={com ? `${com.x.toFixed(2)}, ${com.y.toFixed(2)}` : '—'}
-        />
+        <Stat label="Torso tilt" value={bio?.torsoInclination != null ? deg(Math.abs(bio.torsoInclination)) : '—'} />
+        <Stat label="Hip rot." value={bio?.hipRotation != null ? deg(Math.abs(bio.hipRotation)) : '—'} />
       </div>
       <p className="mx-auto mt-2 max-w-[360px] px-1 text-center text-[10.5px] leading-snug text-slate-600">
-        Live pose from MediaPipe. Centre of mass (amber) is an approximate 2D estimate.
+        Live pose from MediaPipe. Centre of mass &amp; balance are approximate 2D estimates.
       </p>
     </div>
   )
@@ -213,6 +218,22 @@ function Stat({ label, value, highlight }: { label: string; value: string; highl
     >
       <div className="font-mono text-[9px] uppercase tracking-wider text-slate-500">{label}</div>
       <div className="mt-0.5 font-mono text-sm tabular-nums text-slate-100">{value}</div>
+    </div>
+  )
+}
+
+const LEVEL_CLASS: Record<Level, string> = {
+  good: 'border-good/40 bg-good/[0.1] text-good',
+  ok: 'border-accent-500/40 bg-accent-500/[0.1] text-accent-200',
+  warn: 'border-warn/40 bg-warn/[0.1] text-warn',
+}
+
+/** A climber-facing stat with a colour that reflects good/ok/warn. */
+function LevelStat({ label, value, level }: { label: string; value: string; level: Level }) {
+  return (
+    <div className={cx('rounded-xl border px-2.5 py-2 text-center', LEVEL_CLASS[level])}>
+      <div className="text-[9px] font-medium uppercase tracking-wider opacity-80">{label}</div>
+      <div className="mt-0.5 text-[13px] font-semibold text-white">{value}</div>
     </div>
   )
 }

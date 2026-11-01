@@ -10,6 +10,7 @@
 import { extractFrameAt } from './frames'
 import type { PoseTrack, BBox } from './pose-estimation'
 import type { Hold, HoldKind } from '../types'
+import { estimateHoldType } from './holdTypes'
 
 // The BetaWall renders in a fixed 360×540 box (see BetaWall.tsx W/H).
 const WALL_W = 360
@@ -70,15 +71,19 @@ function boxToHold(b: DetectedBox, i: number): Hold {
   const cy = (b.y + b.h / 2) * WALL_H
   const rx = Math.max(6, (b.w * WALL_W) / 2)
   const ry = Math.max(5, (b.h * WALL_H) / 2)
+  // Estimate the physical hold type from the (normalised) box geometry.
+  const type = estimateHoldType({ w: b.w, h: b.h })
   return {
     id: `d${i}`,
     name: 'Detected hold',
     x: cx,
     y: cy,
     kind: 'hand' as HoldKind, // refined later by assignment to limbs/route
-    rx: Math.min(rx, 20),
-    ry: Math.min(ry, 16),
+    rx: Math.min(rx, 22),
+    ry: Math.min(ry, 18),
     rot: 0,
+    type,
+    // color/routeColor are filled by colour sampling in detectHolds().
   }
 }
 
@@ -129,8 +134,17 @@ export async function detectHolds(
       return null
     }
 
+    // Sample each hold's physical colour from the frame (route identity).
+    const colors = await sampleBoxColors(frame.dataUrl, boxes)
+    const holds = boxes.map((b, i) => {
+      const h = boxToHold(b, i)
+      h.color = colors[i]?.hex ?? h.color
+      h.routeColor = colors[i]?.name
+      return h
+    })
+
     return {
-      holds: boxes.map(boxToHold),
+      holds,
       frameTime: t,
       rawCount: data.holds?.length ?? 0,
     }
@@ -138,6 +152,85 @@ export async function detectHolds(
     if (e instanceof DOMException && e.name === 'AbortError') throw e
     console.warn('[ClimbIQ] Hold detection failed:', e)
     return null
+  }
+}
+
+/** Bucket an RGB colour into a coarse climbing-route colour name. */
+export function colorName(r: number, g: number, b: number): string {
+  const max = Math.max(r, g, b)
+  const min = Math.min(r, g, b)
+  const d = max - min
+  if (max < 55) return 'black'
+  if (min > 190 && d < 30) return 'white'
+  if (d < 32) return 'grey'
+  let h = 0
+  if (max === r) h = ((g - b) / d) % 6
+  else if (max === g) h = (b - r) / d + 2
+  else h = (r - g) / d + 4
+  h = (h * 60 + 360) % 360
+  if (h < 15 || h >= 345) return 'red'
+  if (h < 45) return 'orange'
+  if (h < 70) return 'yellow'
+  if (h < 160) return 'green'
+  if (h < 200) return 'teal'
+  if (h < 255) return 'blue'
+  if (h < 290) return 'purple'
+  return 'pink'
+}
+
+const rgbToHex = (r: number, g: number, b: number) =>
+  '#' + [r, g, b].map((n) => Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, '0')).join('')
+
+/**
+ * Sample each box's dominant colour from the detection frame, so holds carry
+ * their physical wall colour (→ route identity for the future "which route did
+ * you climb" filter). Best-effort: returns the boxes unchanged on any failure.
+ */
+async function sampleBoxColors(
+  dataUrl: string,
+  boxes: DetectedBox[],
+): Promise<{ hex: string; name: string }[]> {
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const im = new Image()
+      im.onload = () => resolve(im)
+      im.onerror = () => reject(new Error('img load failed'))
+      im.src = dataUrl
+    })
+    const canvas = document.createElement('canvas')
+    canvas.width = img.naturalWidth
+    canvas.height = img.naturalHeight
+    const ctx = canvas.getContext('2d', { willReadFrequently: true })
+    if (!ctx) return boxes.map(() => ({ hex: '#5b6480', name: 'grey' }))
+    ctx.drawImage(img, 0, 0)
+
+    return boxes.map((b) => {
+      // Average a small patch at the box centre.
+      const cx = Math.round((b.x + b.w / 2) * canvas.width)
+      const cy = Math.round((b.y + b.h / 2) * canvas.height)
+      const s = 6
+      const x0 = Math.max(0, cx - s)
+      const y0 = Math.max(0, cy - s)
+      const w = Math.min(canvas.width - x0, s * 2)
+      const h = Math.min(canvas.height - y0, s * 2)
+      if (w <= 0 || h <= 0) return { hex: '#5b6480', name: 'grey' }
+      const { data } = ctx.getImageData(x0, y0, w, h)
+      let r = 0
+      let g = 0
+      let bl = 0
+      const n = data.length / 4
+      for (let i = 0; i < data.length; i += 4) {
+        r += data[i]
+        g += data[i + 1]
+        bl += data[i + 2]
+      }
+      r /= n
+      g /= n
+      bl /= n
+      return { hex: rgbToHex(r, g, bl), name: colorName(r, g, bl) }
+    })
+  } catch {
+    return boxes.map(() => ({ hex: '#5b6480', name: 'grey' }))
   }
 }
 

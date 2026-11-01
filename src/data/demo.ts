@@ -4,9 +4,11 @@ import type {
   FeedbackItem,
   Hold,
   HoldKind,
+  HoldType,
   LimbState,
   TrainingFocus,
 } from '../types'
+import { HOLD_COLOR } from '../lib/holdTypes'
 
 /**
  * SAMPLE DATA
@@ -25,38 +27,39 @@ const hold = (
   rx = 10,
   ry = 7,
   rot = 0,
-): Hold => ({ id, name, x, y, kind, rx, ry, rot })
+  type: HoldType = 'unknown',
+): Hold => ({ id, name, x, y, kind, rx, ry, rot, type, color: HOLD_COLOR[type] })
 
 const holds: Hold[] = [
   // hand holds on the route
-  hold('s1', 'Left start jug', 130, 400, 'start', 15, 10, -12),
-  hold('s2', 'Right start jug', 215, 395, 'start', 15, 10, 10),
-  hold('h3', 'Crimp rail', 120, 320, 'hand', 13, 6, -6),
-  hold('h4', 'Sidepull', 240, 300, 'hand', 7, 13, 8),
-  hold('h5', 'Pinch', 180, 225, 'hand', 9, 13, -18),
-  hold('h6', 'Sloper', 255, 175, 'hand', 17, 12, 20),
-  hold('fin', 'Finish jug', 215, 105, 'finish', 17, 11, 0),
+  hold('s1', 'Left start jug', 130, 400, 'start', 15, 10, -12, 'jug'),
+  hold('s2', 'Right start jug', 215, 395, 'start', 15, 10, 10, 'jug'),
+  hold('h3', 'Crimp rail', 120, 320, 'hand', 13, 6, -6, 'crimp'),
+  hold('h4', 'Sidepull', 240, 300, 'hand', 7, 13, 8, 'sidepull'),
+  hold('h5', 'Pinch', 180, 225, 'hand', 9, 13, -18, 'pinch'),
+  hold('h6', 'Sloper', 255, 175, 'hand', 17, 12, 20, 'sloper'),
+  hold('fin', 'Finish jug', 215, 105, 'finish', 17, 11, 0, 'jug'),
   // foot holds on the route
-  hold('f1', 'Left foot chip', 110, 480, 'foot', 9, 6, -20),
-  hold('f2', 'Right foot chip', 225, 485, 'foot', 9, 6, 15),
-  hold('f3', 'High foot chip', 265, 410, 'foot', 8, 6, 30),
-  hold('f4', 'Low-left smear chip', 95, 370, 'foot', 9, 6, -10),
-  hold('f5', 'Mid-right foot', 205, 375, 'foot', 9, 6, 8),
-  hold('f6', 'Mid-left foot', 140, 330, 'foot', 8, 6, -25),
-  hold('f7', 'High-right foot', 225, 300, 'foot', 8, 6, 12),
+  hold('f1', 'Left foot chip', 110, 480, 'foot', 9, 6, -20, 'foothold'),
+  hold('f2', 'Right foot chip', 225, 485, 'foot', 9, 6, 15, 'foothold'),
+  hold('f3', 'High foot chip', 265, 410, 'foot', 8, 6, 30, 'foothold'),
+  hold('f4', 'Low-left smear chip', 95, 370, 'foot', 9, 6, -10, 'foothold'),
+  hold('f5', 'Mid-right foot', 205, 375, 'foot', 9, 6, 8, 'foothold'),
+  hold('f6', 'Mid-left foot', 140, 330, 'foot', 8, 6, -25, 'foothold'),
+  hold('f7', 'High-right foot', 225, 300, 'foot', 8, 6, 12, 'foothold'),
   // off-route holds (detected but not used)
-  hold('x1', 'Off-route', 62, 432, 'off', 11, 8, 20),
-  hold('x2', 'Off-route', 305, 455, 'off', 12, 8, -15),
-  hold('x3', 'Off-route', 312, 335, 'off', 9, 7, 35),
-  hold('x4', 'Off-route', 62, 262, 'off', 10, 9, -30),
-  hold('x5', 'Off-route', 315, 228, 'off', 11, 7, 10),
-  hold('x6', 'Off-route', 105, 170, 'off', 12, 9, 40),
-  hold('x7', 'Off-route', 305, 118, 'off', 9, 8, -10),
-  hold('x8', 'Off-route', 78, 96, 'off', 11, 7, 18),
-  hold('x9', 'Off-route', 165, 505, 'off', 10, 6, -8),
-  hold('x10', 'Off-route', 292, 508, 'off', 9, 6, 25),
-  hold('x11', 'Off-route', 160, 55, 'off', 10, 8, 5),
-  hold('x12', 'Off-route', 62, 350, 'off', 8, 6, -22),
+  hold('x1', 'Off-route', 62, 432, 'off', 11, 8, 20, 'jug'),
+  hold('x2', 'Off-route', 305, 455, 'off', 12, 8, -15, 'edge'),
+  hold('x3', 'Off-route', 312, 335, 'off', 9, 7, 35, 'crimp'),
+  hold('x4', 'Off-route', 62, 262, 'off', 10, 9, -30, 'pocket'),
+  hold('x5', 'Off-route', 315, 228, 'off', 11, 7, 10, 'edge'),
+  hold('x6', 'Off-route', 105, 170, 'off', 12, 9, 40, 'sloper'),
+  hold('x7', 'Off-route', 305, 118, 'off', 9, 8, -10, 'pocket'),
+  hold('x8', 'Off-route', 78, 96, 'off', 11, 7, 18, 'crimp'),
+  hold('x9', 'Off-route', 165, 505, 'off', 10, 6, -8, 'foothold'),
+  hold('x10', 'Off-route', 292, 508, 'off', 9, 6, 25, 'foothold'),
+  hold('x11', 'Off-route', 160, 55, 'off', 10, 8, 5, 'jug'),
+  hold('x12', 'Off-route', 62, 350, 'off', 8, 6, -22, 'pinch'),
 ]
 
 const start: LimbState = { lh: 's1', rh: 's2', lf: 'f1', rf: 'f2' }

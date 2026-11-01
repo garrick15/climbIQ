@@ -1,7 +1,31 @@
 import { useMemo, useState } from 'react'
 import { ArrowUpRight, CircleCheck, Lightbulb, TriangleAlert } from 'lucide-react'
-import type { Analysis, FeedbackKind } from '../types'
+import type { Analysis, ClimberStat, FeedbackKind } from '../types'
 import { Card, TimeChip, cx } from './ui'
+
+const LEVEL_STYLE: Record<ClimberStat['level'], string> = {
+  good: 'border-good/30 bg-good/[0.08] text-good',
+  ok: 'border-accent-500/30 bg-accent-500/[0.08] text-accent-200',
+  warn: 'border-warn/30 bg-warn/[0.08] text-warn',
+}
+
+function ClimberStatStrip({ stats }: { stats: ClimberStat[] }) {
+  if (!stats.length) return null
+  return (
+    <div className="mb-5">
+      <p className="mb-2 text-[11px] font-medium uppercase tracking-wider text-slate-500">Your climb at a glance</p>
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+        {stats.map((s) => (
+          <div key={s.id} className={cx('rounded-xl border px-3 py-2.5', LEVEL_STYLE[s.level])}>
+            <div className="text-[10px] font-medium uppercase tracking-wider opacity-80">{s.label}</div>
+            <div className="mt-0.5 text-[15px] font-semibold text-white">{s.value}</div>
+            <p className="mt-1 text-[11px] leading-snug text-slate-400">{s.hint}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 interface Props {
   analysis: Analysis
@@ -37,6 +61,9 @@ export function FeedbackPanel({ analysis, time, onSeek, onOpenStep }: Props) {
 
   return (
     <div>
+      {analysis.climberStats && analysis.climberStats.length > 0 && (
+        <ClimberStatStrip stats={analysis.climberStats} />
+      )}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-slate-400">
           <span className="font-medium text-good">{strengths} things done well</span>
@@ -95,11 +122,13 @@ export function FeedbackPanel({ analysis, time, onSeek, onOpenStep }: Props) {
                   <TimeChip t={f.timestamp} onClick={(t) => onSeek(Math.max(0, t - 0.5), true)} active={active} />
                 </div>
 
-                <p className="mt-3 text-sm leading-relaxed text-slate-300">{f.observation}</p>
-                <p className="mt-2 text-sm leading-relaxed text-slate-400">
-                  <span className="font-medium text-slate-300">Why it matters: </span>
-                  {f.why}
-                </p>
+                {f.observation && <p className="mt-3 text-sm leading-relaxed text-slate-300">{f.observation}</p>}
+                {f.why && (
+                  <p className="mt-2 text-sm leading-relaxed text-slate-400">
+                    <span className="font-medium text-slate-300">Why it matters: </span>
+                    {f.why}
+                  </p>
+                )}
 
                 {f.tryThis && (
                   <div className="mt-3 flex gap-2.5 rounded-xl border border-accent-500/25 bg-accent-500/[0.07] p-3 text-sm leading-relaxed text-slate-200">
@@ -124,6 +153,14 @@ export function FeedbackPanel({ analysis, time, onSeek, onOpenStep }: Props) {
             </li>
           )
         })}
+        {shown.length === 0 && (
+          <li>
+            <Card className="p-6 text-center text-sm text-slate-400">
+              No feedback notes for this view. Try a clearer, side-on clip with your whole body in frame for more
+              detailed coaching.
+            </Card>
+          </li>
+        )}
       </ol>
     </div>
   )

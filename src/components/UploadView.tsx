@@ -247,7 +247,6 @@ export function UploadView({ file, videoUrl, meta, error, onSelect, onClear, onA
     </div>
   )
 }
-
 /** A small, self-playing example of the Visual Beta output. */
 function HeroPreview() {
   const analysis = useMemo(() => buildDemoAnalysis(), [])

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Header } from './components/Header'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import { ProcessingView } from './components/ProcessingView'
 import { ResultsView } from './components/ResultsView'
 import { UploadView } from './components/UploadView'
@@ -48,7 +49,6 @@ export default function App() {
       setVideoUrl(url)
       setMeta(null)
       const m = await readVideoMeta(url)
-      // ignore if the user picked something else while we were reading
       if (urlRef.current === url) setMeta(m)
     },
     [releaseUrl],
@@ -92,7 +92,7 @@ export default function App() {
       </a>
       <Header view={view} onReset={reset} />
 
-      <main id="main" className="mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-6 sm:py-12">
+      <main id="main" className="mx-auto w-full max-w-7xl flex-1 px-4 py-5 sm:px-6 sm:py-6">
         {view === 'upload' && (
           <UploadView
             file={file}
@@ -117,13 +117,15 @@ export default function App() {
         )}
 
         {view === 'results' && analysis && (
-          <ResultsView
-            analysis={analysis}
-            videoUrl={videoUrl}
-            fileName={file?.name}
-            fallbackReason={fallbackReason}
-            poseTrack={poseTrack}
-          />
+          <ErrorBoundary onReset={reset}>
+            <ResultsView
+              analysis={analysis}
+              videoUrl={videoUrl}
+              fileName={file?.name}
+              fallbackReason={fallbackReason}
+              poseTrack={poseTrack}
+            />
+          </ErrorBoundary>
         )}
       </main>
 
