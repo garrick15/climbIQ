@@ -11,6 +11,7 @@
  */
 
 import type { Config, Context } from '@netlify/functions'
+import { guard } from './_guard'
 
 interface CoachRequest {
   /** Measurable, pose-derived facts produced in the browser by MediaPipe. */
@@ -276,9 +277,17 @@ export default async function handler(req: Request, _context: Context): Promise<
     )
   }
 
+  // Read the raw body once so the guard can size-check before we parse.
+  const bodyText = await req.text()
+
+  // Abuse guard: same-origin, body-size cap, per-IP rate limit. This endpoint
+  // spends a paid Meta API budget, so we gate it.
+  const blocked = guard(req, bodyText, { maxPerWindow: 12, maxBodyBytes: 2 * 1024 * 1024 })
+  if (blocked) return blocked
+
   let payload: CoachRequest
   try {
-    payload = (await req.json()) as CoachRequest
+    payload = JSON.parse(bodyText) as CoachRequest
   } catch {
     return json({ error: 'invalid_json', message: 'Request body must be JSON.' }, 400)
   }

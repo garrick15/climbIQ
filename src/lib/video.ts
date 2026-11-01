@@ -1,6 +1,8 @@
 import type { VideoMeta } from '../types'
 
-export const MAX_BYTES = 500 * 1024 * 1024
+// Processed entirely in-browser (MediaPipe runs on the client), so cap well
+// below the old 500 MB — large clips make pose tracking crawl / OOM on phones.
+export const MAX_BYTES = 150 * 1024 * 1024
 
 export function formatBytes(bytes: number): string {
   if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`

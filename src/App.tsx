@@ -49,7 +49,14 @@ export default function App() {
       setVideoUrl(url)
       setMeta(null)
       const m = await readVideoMeta(url)
-      if (urlRef.current === url) setMeta(m)
+      // ignore if the user picked something else while we were reading
+      if (urlRef.current !== url) return
+      if (!m) {
+        // Browser couldn't decode it — don't let it fail later in the pipeline.
+        setError('This video could not be read in the browser. Try an MP4 (H.264), MOV or WebM clip.')
+        return
+      }
+      setMeta(m)
     },
     [releaseUrl],
   )
