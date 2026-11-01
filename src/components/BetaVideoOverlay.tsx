@@ -66,6 +66,8 @@ export function BetaVideoOverlay({ analysis, activeStep, box, video }: Props) {
   const targets = moved
     .map((l) => ({ limb: l, p: toWallPoint(step.limbs[l]) }))
     .filter((t): t is { limb: Limb; p: { x: number; y: number } } => !!t.p)
+  // The primary target: the coach's declared moving limb, else the first.
+  const primaryTarget = targets.find((t) => t.limb === step.moveLimb) ?? targets[0]
 
   // Movement arrows from previous position → target.
   const arrows = prev
@@ -143,6 +145,51 @@ export function BetaVideoOverlay({ analysis, activeStep, box, video }: Props) {
           </g>
         )
       })}
+
+      {/* "Target hold" callout on the primary target (like the mockup). */}
+      {primaryTarget &&
+        (() => {
+          const d = toDisp(primaryTarget.p.x, primaryTarget.p.y)
+          const right = d.x < box.width - 150
+          const lx = right ? d.x + 20 : d.x - 150
+          const ly = Math.max(14, d.y - 34)
+          return (
+            <g>
+              <rect x={lx} y={ly} width={132} height={30} rx={8} fill="rgba(11,14,24,0.85)" stroke="rgba(167,139,250,0.5)" />
+              <text x={lx + 10} y={ly + 13} fontSize={10} fontWeight={700} fill="#ddd6fe" fontFamily="Inter, system-ui">
+                TARGET HOLD
+              </text>
+              <text x={lx + 10} y={ly + 24} fontSize={9} fill="#9aa3bd" fontFamily="Inter, system-ui">
+                {step.moveLimb ? `${step.moveLimb.toUpperCase()} → reach` : 'next hold'}
+              </text>
+            </g>
+          )
+        })()}
+
+      {/* Floating instruction label (e.g. "Shift hips left"). */}
+      {step.instruction && (
+        <g>
+          <rect
+            x={14}
+            y={box.height - 46}
+            width={Math.min(box.width - 28, step.instruction.length * 7 + 28)}
+            height={30}
+            rx={15}
+            fill="rgba(74,214,159,0.14)"
+            stroke="rgba(74,214,159,0.5)"
+          />
+          <text
+            x={30}
+            y={box.height - 26}
+            fontSize={12}
+            fontWeight={600}
+            fill="#8ef0c0"
+            fontFamily="Inter, system-ui"
+          >
+            {step.instruction}
+          </text>
+        </g>
+      )}
     </svg>
   )
 }

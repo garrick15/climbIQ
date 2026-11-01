@@ -94,6 +94,16 @@ export interface BetaStep {
   rating?: MoveRating
   /** one-line reason the recommended move is right (the "why") */
   reason?: string
+  /** 2-4 ordered micro-steps to execute the move (coach panel) */
+  moveSteps?: string[]
+  /** what the climber did wrong/right, phrased as a coach note */
+  coachNote?: string
+  /** bullet points of what went wrong in the attempt */
+  attemptIssues?: string[]
+  /** bullet points of what the recommended move gets right */
+  recommendedWins?: string[]
+  /** estimated success likelihood of the recommended move, 0-100 */
+  successRate?: number
 }
 
 export type FeedbackKind = 'strength' | 'improve'

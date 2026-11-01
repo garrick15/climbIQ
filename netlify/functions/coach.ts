@@ -50,6 +50,13 @@ BETA — one step per detected move, in order. For EACH step provide:
 - "reason": ONE sentence on why this move/way is right (the coaching insight).
 - "title": 2-4 word label. "summary": the instruction expanded to one sentence.
 - "bodyPosition" and "why": short and practical. "timestamp": seconds.
+- "moveSteps": 3-4 short ordered micro-steps to execute the move, e.g.
+  ["Transfer weight to left foot","Rotate hips to the wall","Reach the target hold"].
+- "attemptIssues": 1-2 short bullets on what the climber did wrong this move
+  (empty array if the move was clean). "recommendedWins": 1-2 short bullets on what
+  the recommended move does better.
+- "coachNote": one friendly sentence of direct coaching for this move.
+- "successRate": integer 0-100, your estimate that the recommended move succeeds.
 
 FEEDBACK — keep it SHORT and ACTIONABLE. 3-5 items max. Each:
 - "title": the verdict headline (e.g. "Drop your heel on the crux").
@@ -117,6 +124,11 @@ const RESPONSE_SCHEMA = {
           yourAttempt: { type: 'string' },
           timestamp: { type: 'number' },
           crux: { type: 'boolean' },
+          moveSteps: { type: 'array', items: { type: 'string' } },
+          attemptIssues: { type: 'array', items: { type: 'string' } },
+          recommendedWins: { type: 'array', items: { type: 'string' } },
+          coachNote: { type: 'string' },
+          successRate: { type: 'number' },
         },
       },
     },

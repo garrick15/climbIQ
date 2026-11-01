@@ -6,7 +6,7 @@ import { formatTime } from '../lib/video'
 import type { PoseTrack } from '../lib/pose-estimation'
 import { FeedbackPanel } from './FeedbackPanel'
 import { VideoPanel } from './VideoPanel'
-import { VisualBeta } from './VisualBeta'
+import { MoveCoachPanel } from './MoveCoachPanel'
 import { Card, Eyebrow, Meter, cx } from './ui'
 
 type Tab = 'beta' | 'feedback'
@@ -129,7 +129,67 @@ export function ResultsView({ analysis, videoUrl, fileName, fallbackReason, pose
         </div>
       </div>
 
-      <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
+      {/* Tab switch: watch the annotated climb (Visual Beta) or read Feedback. */}
+      <div className="mt-6 inline-flex rounded-xl border bg-ink-850 p-1" role="tablist" aria-label="Coaching output">
+        {tabs.map((t) => {
+          const Icon = t.icon
+          const active = tab === t.id
+          return (
+            <button
+              key={t.id}
+              type="button"
+              role="tab"
+              id={`tab-${t.id}`}
+              aria-selected={active}
+              aria-controls={`tabpanel-${t.id}`}
+              onClick={() => setTab(t.id)}
+              className={cx(
+                'inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors',
+                active ? 'bg-accent-600 text-white' : 'text-slate-400 hover:bg-white/[0.04] hover:text-slate-200',
+              )}
+            >
+              <Icon className="h-4 w-4" aria-hidden />
+              {t.label}
+              <span className={cx('font-mono text-[10px]', active ? 'text-white/70' : 'text-slate-600')}>
+                {t.id === 'feedback' ? `${improve} to fix` : t.hint}
+              </span>
+            </button>
+          )
+        })}
+      </div>
+
+      {tab === 'beta' ? (
+        // Centrepiece: the annotated footage (left) + per-move coach panel (right).
+        <div className="mt-5 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">
+          <div className="lg:sticky lg:top-20">
+            <VideoPanel analysis={analysis} player={player} fileName={fileName} poseTrack={poseTrack} />
+          </div>
+          <section aria-label="Move coaching" className="animate-fade-in">
+            <MoveCoachPanel
+              analysis={analysis}
+              stepIndex={stepIndex}
+              onStep={(i) => {
+                setFollowVideo(false)
+                setStepIndex(i)
+                const ts = analysis.beta[i]?.timestamp
+                if (typeof ts === 'number') player.seek(Math.max(0, ts), false)
+              }}
+            />
+          </section>
+        </div>
+      ) : (
+        <div className="mt-5 grid items-start gap-6 lg:grid-cols-[minmax(0,380px)_minmax(0,1fr)]">
+          <div className="lg:sticky lg:top-20">
+            <VideoPanel analysis={analysis} player={player} fileName={fileName} poseTrack={poseTrack} />
+          </div>
+          <section aria-label="Feedback" className="animate-fade-in">
+            <FeedbackPanel analysis={analysis} time={player.time} onSeek={player.seek} onOpenStep={openStep} />
+          </section>
+        </div>
+      )}
+
+      {/* Metric strip along the bottom (like the mockup). */}
+      <div className="mt-8 grid grid-cols-2 gap-3 lg:grid-cols-4">
         {analysis.metrics.map((m) => (
           <Card key={m.id} className="p-4">
             <p className="text-xs text-slate-400">{m.label}</p>
@@ -141,70 +201,6 @@ export function ResultsView({ analysis, videoUrl, fileName, fallbackReason, pose
             <p className="mt-2.5 text-xs leading-snug text-slate-500">{m.note}</p>
           </Card>
         ))}
-      </div>
-
-      <div className="mt-6 grid items-start gap-6 lg:grid-cols-[minmax(0,380px)_minmax(0,1fr)]">
-        <div className="lg:sticky lg:top-20">
-          <VideoPanel analysis={analysis} player={player} fileName={fileName} poseTrack={poseTrack} />
-        </div>
-
-        <section aria-label="Coaching output">
-          <div className="grid grid-cols-2 gap-1 rounded-xl border bg-ink-850 p-1" role="tablist" aria-label="Coaching output">
-            {tabs.map((t) => {
-              const Icon = t.icon
-              const active = tab === t.id
-              return (
-                <button
-                  key={t.id}
-                  type="button"
-                  role="tab"
-                  id={`tab-${t.id}`}
-                  aria-selected={active}
-                  aria-controls={`tabpanel-${t.id}`}
-                  onClick={() => setTab(t.id)}
-                  className={cx(
-                    'flex flex-col items-center justify-center gap-0.5 rounded-lg px-2 py-2.5 transition-colors sm:flex-row sm:gap-2.5',
-                    active ? 'bg-accent-600 text-white shadow-[0_6px_20px_-8px_rgb(124_58_237/0.9)]' : 'text-slate-400 hover:bg-white/[0.04] hover:text-slate-200',
-                  )}
-                >
-                  <Icon className="h-4 w-4" aria-hidden />
-                  <span className="text-sm font-medium">{t.label}</span>
-                  <span className={cx('hidden font-mono text-[10px] md:inline', active ? 'text-white/70' : 'text-slate-600')}>
-                    {t.id === 'feedback' ? `${improve} to fix` : t.hint}
-                  </span>
-                </button>
-              )
-            })}
-          </div>
-
-          <div
-            key={tab}
-            role="tabpanel"
-            id={`tabpanel-${tab}`}
-            aria-labelledby={`tab-${tab}`}
-            className="mt-5 animate-fade-in"
-          >
-            {tab === 'beta' && (
-              <VisualBeta
-                analysis={analysis}
-                stepIndex={stepIndex}
-                onStep={(i) => {
-                  // Manual move pick: stop auto-follow and move the video to this
-                  // move so your footage and the suggested beta stay side-by-side.
-                  setFollowVideo(false)
-                  setStepIndex(i)
-                  const ts = analysis.beta[i]?.timestamp
-                  if (typeof ts === 'number') player.seek(Math.max(0, ts), false)
-                }}
-                onSeek={(t) => player.seek(Math.max(0, t - 0.5), true)}
-                followVideo={followVideo}
-              />
-            )}
-            {tab === 'feedback' && (
-              <FeedbackPanel analysis={analysis} time={player.time} onSeek={player.seek} onOpenStep={openStep} />
-            )}
-          </div>
-        </section>
       </div>
     </div>
   )

@@ -205,6 +205,20 @@ function normaliseCoach(raw: unknown, obs: MovementObservations): CoachOutput {
     moveLimb: MOVE_LIMBS.includes(asStr(s.moveLimb)) ? (asStr(s.moveLimb) as 'lh' | 'rh' | 'lf' | 'rf') : undefined,
     rating: RATINGS.includes(asStr(s.rating)) ? (asStr(s.rating) as 'best' | 'good' | 'inaccuracy' | 'mistake') : undefined,
     reason: asStr(s.reason) || asStr(s.why),
+    // rich coach-panel fields (with safe fallbacks so the panel is never empty)
+    moveSteps: asArray<unknown>(s.moveSteps)
+      .map((x) => (typeof x === 'string' ? x : ''))
+      .filter(Boolean),
+    attemptIssues: asArray<unknown>(s.attemptIssues)
+      .map((x) => (typeof x === 'string' ? x : ''))
+      .filter(Boolean),
+    recommendedWins: asArray<unknown>(s.recommendedWins)
+      .map((x) => (typeof x === 'string' ? x : ''))
+      .filter(Boolean),
+    coachNote: asStr(s.coachNote) || asStr(s.yourAttempt),
+    successRate: Number.isFinite(asNum(s.successRate, NaN))
+      ? Math.round(Math.min(100, Math.max(0, asNum(s.successRate, 0))))
+      : undefined,
   }))
 
   // The model sometimes names these fields differently (name/score/…), so
