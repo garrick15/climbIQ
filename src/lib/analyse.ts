@@ -159,6 +159,12 @@ export async function analyseClimb(opts: {
           'The coaching model took too long to respond (server timeout). Showing sample data — try a shorter clip.',
         )
       }
+      if (res.status === 429) {
+        return fallback('Too many analyses in a short time. Please wait a moment and try again.')
+      }
+      if (res.status === 413) {
+        return fallback('This clip produced too much data to analyse. Try a shorter clip.')
+      }
       const detail = err.detail ? ` Detail: ${String(err.detail).slice(0, 300)}` : ''
       const upstream = err.status ? ` (Meta API status ${err.status})` : ''
       return fallback(

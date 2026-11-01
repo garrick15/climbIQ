@@ -13,6 +13,7 @@
  */
 
 import type { Config, Context } from '@netlify/functions'
+import { guard } from './_guard'
 
 interface HoldsRequest {
   /** base64 data URL of a wall frame */
@@ -100,9 +101,15 @@ export default async function handler(req: Request, _ctx: Context): Promise<Resp
   const apiKey = process.env.META_API_KEY
   if (!apiKey) return json({ error: 'missing_api_key', message: 'META_API_KEY is not set.' }, 501)
 
+  // Read raw body once for the size-aware abuse guard (frames are large, so a
+  // bigger body cap than the coach endpoint).
+  const bodyText = await req.text()
+  const blocked = guard(req, bodyText, { maxPerWindow: 12, maxBodyBytes: 8 * 1024 * 1024 })
+  if (blocked) return blocked
+
   let payload: HoldsRequest
   try {
-    payload = (await req.json()) as HoldsRequest
+    payload = JSON.parse(bodyText) as HoldsRequest
   } catch {
     return json({ error: 'invalid_json' }, 400)
   }
