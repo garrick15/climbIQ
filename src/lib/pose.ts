@@ -42,7 +42,9 @@ export function holdMap(holds: Hold[]): Map<string, Hold> {
 export function resolveTarget(target: LimbTarget, map: Map<string, Hold>): Point {
   if (typeof target === 'string') {
     const h = map.get(target)
-    if (!h) throw new Error(`Unknown hold: ${target}`)
+    // Fall back to a neutral point rather than throwing — a missing hold id
+    // must never crash the render (it would blank the whole app).
+    if (!h) return { x: 180, y: 300 }
     return { x: h.x, y: h.y }
   }
   return target

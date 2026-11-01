@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Header } from './components/Header'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import { ProcessingView } from './components/ProcessingView'
 import { PhotoProcessingView } from './components/PhotoProcessingView'
 import { ResultsView } from './components/ResultsView'
@@ -163,14 +164,16 @@ export default function App() {
         )}
 
         {view === 'results' && analysis && (
-          <ResultsView
-            analysis={analysis}
-            videoUrl={mode === 'video' ? videoUrl : undefined}
-            photoUrl={mode === 'photo' ? photoUrl : undefined}
-            fileName={file?.name}
-            fallbackReason={fallbackReason}
-            poseTrack={poseTrack}
-          />
+          <ErrorBoundary onReset={reset}>
+            <ResultsView
+              analysis={analysis}
+              videoUrl={mode === 'video' ? videoUrl : undefined}
+              photoUrl={mode === 'photo' ? photoUrl : undefined}
+              fileName={file?.name}
+              fallbackReason={fallbackReason}
+              poseTrack={poseTrack}
+            />
+          </ErrorBoundary>
         )}
       </main>
 
