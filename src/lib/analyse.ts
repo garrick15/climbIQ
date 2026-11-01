@@ -4,7 +4,6 @@ import { estimatePose } from './pose-estimation'
 import type { LiveFrame, PoseTrack } from './pose-estimation'
 import { analyseMovement } from './movement'
 import { buildAnalysis } from './build-analysis'
-import { sampleFrames } from './frames'
 import { detectHolds } from './holds'
 import type { HoldDetection } from './holds'
 
@@ -113,15 +112,11 @@ export async function analyseClimb(opts: {
     }
     onProgress({ stage: 3, fraction: 1 })
 
-    // Grab a few frames for visual grounding (optional; best-effort).
-    let frames: string[] = []
-    try {
-      // Keep this small: images dominate request size/latency and the function
-      // must respond within the serverless time limit (~10s on Netlify free).
-      frames = await sampleFrames(file, 2, signal)
-    } catch {
-      frames = []
-    }
+    // Visual grounding frames are OFF by default: images are the single biggest
+    // driver of model latency, and the pose/biomechanics observations already
+    // carry the real signal. Keeping the request text-only is what lets the
+    // coaching call finish inside the serverless time budget.
+    const frames: string[] = []
 
     // A compact summary of detected holds so coaching can reference them.
     const holdSummary = detection
