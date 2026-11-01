@@ -10,9 +10,11 @@ interface Props {
   stepIndex: number
   onStep: (i: number) => void
   onSeek: (t: number) => void
+  /** true while the wall is auto-following video playback */
+  followVideo?: boolean
 }
 
-export function VisualBeta({ analysis, stepIndex, onStep, onSeek }: Props) {
+export function VisualBeta({ analysis, stepIndex, onStep, onSeek, followVideo }: Props) {
   const { beta, holds } = analysis
   const [auto, setAuto] = useState(false)
   const step = beta[stepIndex]
@@ -22,12 +24,14 @@ export function VisualBeta({ analysis, stepIndex, onStep, onSeek }: Props) {
   const last = beta.length - 1
 
   useEffect(() => {
-    if (!auto) return
+    // The internal auto-player is only for when the wall is NOT following the
+    // video; otherwise video playback drives the step and two clocks would fight.
+    if (!auto || followVideo) return
     const id = setInterval(() => {
       onStep(stepIndex >= last ? 0 : stepIndex + 1)
     }, 2800)
     return () => clearInterval(id)
-  }, [auto, stepIndex, last, onStep])
+  }, [auto, followVideo, stepIndex, last, onStep])
 
   const go = (i: number) => {
     setAuto(false)
@@ -76,9 +80,17 @@ export function VisualBeta({ analysis, stepIndex, onStep, onSeek }: Props) {
       <Card className="flex flex-col p-5 sm:p-6">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <Eyebrow>
-              Move {stepIndex + 1} of {beta.length}
-            </Eyebrow>
+            <div className="flex items-center gap-2">
+              <Eyebrow>
+                Move {stepIndex + 1} of {beta.length}
+              </Eyebrow>
+              {followVideo && (
+                <span className="inline-flex items-center gap-1 rounded-full border border-good/40 bg-good/15 px-2 py-0.5 text-[10px] font-medium text-good">
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-good" />
+                  Following video
+                </span>
+              )}
+            </div>
             <h3 className="mt-1.5 text-xl font-semibold tracking-tight text-white" aria-live="polite">
               {step.title}
             </h3>

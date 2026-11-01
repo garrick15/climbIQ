@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Clock, Info, Mountain, MessageSquareText, Route, Target, Trophy } from 'lucide-react'
 import type { Analysis } from '../types'
 import { usePlayer } from '../lib/usePlayer'
@@ -24,6 +24,29 @@ export function ResultsView({ analysis, videoUrl, fileName, fallbackReason, pose
   const player = usePlayer(videoUrl, analysis.climb.durationSec)
   const [tab, setTab] = useState<Tab>('beta')
   const [stepIndex, setStepIndex] = useState(0)
+  // When true, the Visual Beta follows the video; a manual move pick pauses it.
+  const [followVideo, setFollowVideo] = useState(true)
+
+  // The beta move that matches the current playback time (last move whose
+  // timestamp has been reached). This is what keeps the wall in sync with the
+  // video the user is watching.
+  const timeStep = useMemo(() => {
+    let idx = 0
+    analysis.beta.forEach((s, i) => {
+      if (s.timestamp <= player.time + 0.15) idx = i
+    })
+    return idx
+  }, [analysis.beta, player.time])
+
+  // While following, drive the wall from the video's time.
+  useEffect(() => {
+    if (followVideo && timeStep !== stepIndex) setStepIndex(timeStep)
+  }, [followVideo, timeStep, stepIndex])
+
+  // Resume following once the video plays again.
+  useEffect(() => {
+    if (player.playing) setFollowVideo(true)
+  }, [player.playing])
 
   const improve = analysis.feedback.filter((f) => f.kind === 'improve').length
 
@@ -35,7 +58,12 @@ export function ResultsView({ analysis, videoUrl, fileName, fallbackReason, pose
 
   const openStep = (stepId: string) => {
     const i = analysis.beta.findIndex((s) => s.id === stepId)
-    if (i >= 0) setStepIndex(i)
+    if (i >= 0) {
+      setFollowVideo(false)
+      setStepIndex(i)
+      const ts = analysis.beta[i]?.timestamp
+      if (typeof ts === 'number') player.seek(Math.max(0, ts), false)
+    }
     setTab('beta')
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
@@ -162,8 +190,16 @@ export function ResultsView({ analysis, videoUrl, fileName, fallbackReason, pose
               <VisualBeta
                 analysis={analysis}
                 stepIndex={stepIndex}
-                onStep={setStepIndex}
+                onStep={(i) => {
+                  // Manual move pick: stop auto-follow and move the video to this
+                  // move so your footage and the suggested beta stay side-by-side.
+                  setFollowVideo(false)
+                  setStepIndex(i)
+                  const ts = analysis.beta[i]?.timestamp
+                  if (typeof ts === 'number') player.seek(Math.max(0, ts), false)
+                }}
                 onSeek={(t) => player.seek(Math.max(0, t - 0.5), true)}
+                followVideo={followVideo}
               />
             )}
             {tab === 'feedback' && (
