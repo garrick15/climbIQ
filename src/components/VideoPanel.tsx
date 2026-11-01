@@ -14,9 +14,13 @@ interface Props {
   player: Player
   fileName?: string
   poseTrack?: PoseTrack
+  /** when set (photo-beta flow), the wall photo is shown behind the beta */
+  photoUrl?: string
+  /** active beta step for the photo overlay (photo flow has no video clock) */
+  photoStep?: number
 }
 
-export function VideoPanel({ analysis, player, fileName, poseTrack }: Props) {
+export function VideoPanel({ analysis, player, fileName, poseTrack, photoUrl, photoStep }: Props) {
   const { time, duration, playing, speed, src } = player
   const pct = duration > 0 ? (time / duration) * 100 : 0
 
@@ -51,7 +55,13 @@ export function VideoPanel({ analysis, player, fileName, poseTrack }: Props) {
   return (
     <Card className="overflow-hidden">
       <div ref={stageRef} className="relative aspect-[3/4] bg-black">
-        {src ? (
+        {photoUrl && !src ? (
+          <img
+            src={photoUrl}
+            alt={fileName ? `Wall: ${fileName}` : 'Wall photo'}
+            className="h-full w-full object-contain"
+          />
+        ) : src ? (
           <video
             ref={player.videoRef}
             src={src}
@@ -74,13 +84,23 @@ export function VideoPanel({ analysis, player, fileName, poseTrack }: Props) {
           </div>
         )}
 
-        {/* Suggested beta for the current move, synced to playback. */}
+        {/* Suggested beta for the current move on a VIDEO, synced to playback. */}
         {src && showBeta && analysis.source === 'ai' && poseTrack && (
           <BetaVideoOverlay
             analysis={analysis}
             activeStep={Math.max(0, stepIdx)}
             box={box}
             video={{ w: poseTrack.width, h: poseTrack.height }}
+          />
+        )}
+
+        {/* Suggested beta drawn on a PHOTO (holds are in 360x540 wall space). */}
+        {photoUrl && !src && showBeta && analysis.source === 'ai' && (
+          <BetaVideoOverlay
+            analysis={analysis}
+            activeStep={photoStep ?? analysis.beta.length - 1}
+            box={box}
+            video={{ w: 360, h: 540 }}
           />
         )}
 

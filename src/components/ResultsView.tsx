@@ -14,12 +14,13 @@ type Tab = 'beta' | 'feedback'
 interface Props {
   analysis: Analysis
   videoUrl?: string
+  photoUrl?: string
   fileName?: string
   fallbackReason?: string | null
   poseTrack?: PoseTrack
 }
 
-export function ResultsView({ analysis, videoUrl, fileName, fallbackReason, poseTrack }: Props) {
+export function ResultsView({ analysis, videoUrl, photoUrl, fileName, fallbackReason, poseTrack }: Props) {
   const player = usePlayer(videoUrl, analysis.climb.durationSec)
   const [tab, setTab] = useState<Tab>('beta')
   const [stepIndex, setStepIndex] = useState(0)
@@ -145,7 +146,14 @@ export function ResultsView({ analysis, videoUrl, fileName, fallbackReason, pose
 
       <div className="mt-6 grid items-start gap-6 lg:grid-cols-[minmax(0,380px)_minmax(0,1fr)]">
         <div className="lg:sticky lg:top-20">
-          <VideoPanel analysis={analysis} player={player} fileName={fileName} poseTrack={poseTrack} />
+          <VideoPanel
+            analysis={analysis}
+            player={player}
+            fileName={fileName}
+            poseTrack={poseTrack}
+            photoUrl={photoUrl}
+            photoStep={stepIndex}
+          />
         </div>
 
         <section aria-label="Coaching output">
