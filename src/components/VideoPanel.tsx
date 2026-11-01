@@ -50,7 +50,10 @@ export function VideoPanel({ analysis, player, fileName, poseTrack }: Props) {
 
   return (
     <Card className="overflow-hidden">
-      <div ref={stageRef} className="relative aspect-[3/4] bg-black">
+      <div
+        ref={stageRef}
+        className="relative mx-auto aspect-[3/4] h-[58vh] max-h-[620px] max-w-full bg-black"
+      >
         {src ? (
           <video
             ref={player.videoRef}

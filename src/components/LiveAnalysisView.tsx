@@ -84,7 +84,7 @@ export function LiveAnalysisView({ frame }: Props) {
     <div className="w-full">
       <div
         ref={stageRef}
-        className="relative mx-auto aspect-[3/4] w-full max-w-[360px] overflow-hidden rounded-[18px] border border-white/10 bg-black shadow-[0_24px_60px_-24px_rgb(0_0_0/0.8)]"
+        className="relative mx-auto aspect-[3/4] h-[46vh] max-h-[460px] overflow-hidden rounded-[18px] border border-white/10 bg-black shadow-[0_24px_60px_-24px_rgb(0_0_0/0.8)]"
       >
         {frame?.image ? (
           <img src={frame.image} alt="" aria-hidden className="absolute inset-0 h-full w-full object-contain" />

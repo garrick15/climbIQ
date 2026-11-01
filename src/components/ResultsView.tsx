@@ -7,7 +7,7 @@ import type { PoseTrack } from '../lib/pose-estimation'
 import { FeedbackPanel } from './FeedbackPanel'
 import { VideoPanel } from './VideoPanel'
 import { MoveCoachPanel } from './MoveCoachPanel'
-import { Card, Eyebrow, Meter, cx } from './ui'
+import { Card, Meter, cx } from './ui'
 
 type Tab = 'beta' | 'feedback'
 
@@ -69,28 +69,17 @@ export function ResultsView({ analysis, videoUrl, fileName, fallbackReason, pose
   return (
     <div className="animate-fade-up">
       {analysis.source === 'ai' ? (
-        <div className="mb-5 flex items-start gap-3 rounded-xl border border-good/25 bg-good/[0.07] px-4 py-3 text-[13px] leading-relaxed text-slate-300">
-          <Info className="mt-0.5 h-4 w-4 shrink-0 text-good" aria-hidden />
-          <p>
-            <span className="font-medium text-good">Live analysis of your climb.</span> Body pose was tracked with
-            MediaPipe
-            {analysis.provenance ? ` (detected in ${Math.round(analysis.provenance.poseDetectionRate * 100)}% of sampled frames)` : ''}
-            ; the coaching is Muse Spark interpreting that movement.{' '}
-            {analysis.provenance?.holdsDetected ? (
-              <>
-                Holds were detected with SAM&nbsp;3.1 (<em>approximate</em>). Beta is a <em>suggested</em> sequence.
-              </>
-            ) : (
-              <>
-                Beta is a <em>suggested</em> sequence and target holds are approximate — automatic hold detection found
-                too few holds on this clip, so targets are placed from your hand positions.
-              </>
-            )}
+        <div className="mb-3 flex items-center gap-2 rounded-lg border border-good/25 bg-good/[0.07] px-3 py-2 text-[12px] leading-snug text-slate-300">
+          <Info className="h-3.5 w-3.5 shrink-0 text-good" aria-hidden />
+          <p className="truncate">
+            <span className="font-medium text-good">Live analysis</span> — pose by MediaPipe
+            {analysis.provenance ? ` (${Math.round(analysis.provenance.poseDetectionRate * 100)}% tracked)` : ''}, coaching
+            by Muse Spark. Beta is <em>suggested</em>; holds {analysis.provenance?.holdsDetected ? 'detected (approx.)' : 'approximate'}.
           </p>
         </div>
       ) : (
-        <div className="mb-5 flex items-start gap-3 rounded-xl border border-warn/30 bg-warn/[0.08] px-4 py-3 text-[13px] leading-relaxed text-slate-300">
-          <Info className="mt-0.5 h-4 w-4 shrink-0 text-warn" aria-hidden />
+        <div className="mb-3 flex items-start gap-2 rounded-lg border border-warn/30 bg-warn/[0.08] px-3 py-2 text-[12px] leading-snug text-slate-300">
+          <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warn" aria-hidden />
           <p>
             <span className="font-medium text-warn">Sample data.</span>{' '}
             {fallbackReason ??
@@ -99,13 +88,12 @@ export function ResultsView({ analysis, videoUrl, fileName, fallbackReason, pose
         </div>
       )}
 
-      <div className="flex flex-wrap items-end justify-between gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
-          <Eyebrow>Analysis complete</Eyebrow>
-          <h1 className="mt-2 truncate text-3xl font-semibold tracking-tight text-white">
+          <h1 className="truncate text-xl font-semibold tracking-tight text-white sm:text-2xl">
             {fileName ?? 'Sample climb'}
           </h1>
-          <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-300">
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-300">
             {[
               { icon: Trophy, text: analysis.climb.outcome },
               { icon: Clock, text: formatTime(analysis.climb.durationSec) },
@@ -130,7 +118,7 @@ export function ResultsView({ analysis, videoUrl, fileName, fallbackReason, pose
       </div>
 
       {/* Tab switch: watch the annotated climb (Visual Beta) or read Feedback. */}
-      <div className="mt-6 inline-flex rounded-xl border bg-ink-850 p-1" role="tablist" aria-label="Coaching output">
+      <div className="mt-4 inline-flex rounded-xl border bg-ink-850 p-1" role="tablist" aria-label="Coaching output">
         {tabs.map((t) => {
           const Icon = t.icon
           const active = tab === t.id
@@ -160,11 +148,14 @@ export function ResultsView({ analysis, videoUrl, fileName, fallbackReason, pose
 
       {tab === 'beta' ? (
         // Centrepiece: the annotated footage (left) + per-move coach panel (right).
-        <div className="mt-5 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">
-          <div className="lg:sticky lg:top-20">
+        <div className="mt-4 grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,400px)]">
+          <div>
             <VideoPanel analysis={analysis} player={player} fileName={fileName} poseTrack={poseTrack} />
           </div>
-          <section aria-label="Move coaching" className="animate-fade-in">
+          <section
+            aria-label="Move coaching"
+            className="animate-fade-in lg:max-h-[72vh] lg:overflow-y-auto lg:pr-1"
+          >
             <MoveCoachPanel
               analysis={analysis}
               stepIndex={stepIndex}
@@ -178,18 +169,18 @@ export function ResultsView({ analysis, videoUrl, fileName, fallbackReason, pose
           </section>
         </div>
       ) : (
-        <div className="mt-5 grid items-start gap-6 lg:grid-cols-[minmax(0,380px)_minmax(0,1fr)]">
-          <div className="lg:sticky lg:top-20">
+        <div className="mt-4 grid items-start gap-5 lg:grid-cols-[minmax(0,360px)_minmax(0,1fr)]">
+          <div className="lg:sticky lg:top-4">
             <VideoPanel analysis={analysis} player={player} fileName={fileName} poseTrack={poseTrack} />
           </div>
-          <section aria-label="Feedback" className="animate-fade-in">
+          <section aria-label="Feedback" className="animate-fade-in lg:max-h-[72vh] lg:overflow-y-auto lg:pr-1">
             <FeedbackPanel analysis={analysis} time={player.time} onSeek={player.seek} onOpenStep={openStep} />
           </section>
         </div>
       )}
 
       {/* Metric strip along the bottom (like the mockup). */}
-      <div className="mt-8 grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
         {analysis.metrics.map((m) => (
           <Card key={m.id} className="p-4">
             <p className="text-xs text-slate-400">{m.label}</p>

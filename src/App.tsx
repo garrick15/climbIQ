@@ -92,7 +92,7 @@ export default function App() {
       </a>
       <Header view={view} onReset={reset} />
 
-      <main id="main" className="mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-6 sm:py-12">
+      <main id="main" className="mx-auto w-full max-w-7xl flex-1 px-4 py-5 sm:px-6 sm:py-6">
         {view === 'upload' && (
           <UploadView
             file={file}
