@@ -59,7 +59,10 @@ FEEDBACK — keep it SHORT and ACTIONABLE. 3-5 items max. Each:
 - "timestamp" + "skill". Do not pad. Prefer imperative voice ("Keep your hips in", not
   "The climber's hips drifted").
 
-metrics: 3-4 scored 0-100 with a one-line note.
+metrics: EXACTLY 3-4 items, each an object with "label" (a skill name like
+"Movement fluency", "Body positioning", "Footwork", "Arm efficiency"), "value" (an
+INTEGER 0-100 scoring that skill on this climb), and "note" (one short sentence).
+Use those exact keys. Never leave value as 0 unless the climb truly warrants it.
 Never return empty strings. Be specific and useful over verbose.
 
 Return ONLY valid JSON matching the provided schema. No prose outside the JSON.`

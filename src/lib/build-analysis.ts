@@ -207,12 +207,33 @@ function normaliseCoach(raw: unknown, obs: MovementObservations): CoachOutput {
     reason: asStr(s.reason) || asStr(s.why),
   }))
 
-  const metrics = asArray<Record<string, unknown>>(c.metrics).map((m, i) => ({
-    id: asStr(m.id) || `m-${i}`,
-    label: asStr(m.label, 'Metric'),
-    value: Math.min(100, Math.max(0, asNum(m.value, 0))),
-    note: asStr(m.note),
-  }))
+  // The model sometimes names these fields differently (name/score/…), so
+  // accept common aliases and parse numeric strings like "72" or "72%".
+  const firstStr = (...vals: unknown[]): string => {
+    for (const v of vals) if (typeof v === 'string' && v.trim()) return v.trim()
+    return ''
+  }
+  const firstNum = (...vals: unknown[]): number => {
+    for (const v of vals) {
+      if (typeof v === 'number' && Number.isFinite(v)) return v
+      if (typeof v === 'string') {
+        const parsed = parseFloat(v.replace(/[^0-9.\-]/g, ''))
+        if (Number.isFinite(parsed)) return parsed
+      }
+    }
+    return NaN
+  }
+  const metrics = asArray<Record<string, unknown>>(c.metrics).map((m, i) => {
+    const raw = firstNum(m.value, m.score, m.rating, m.percent, m.val)
+    // Some models return 0–1 instead of 0–100.
+    const scaled = Number.isFinite(raw) ? (raw > 0 && raw <= 1 ? raw * 100 : raw) : 0
+    return {
+      id: asStr(m.id) || `m-${i}`,
+      label: firstStr(m.label, m.name, m.title, m.skill, m.metric) || `Metric ${i + 1}`,
+      value: Math.round(Math.min(100, Math.max(0, scaled))),
+      note: firstStr(m.note, m.detail, m.description, m.comment),
+    }
+  })
 
   const feedback = asArray<Record<string, unknown>>(c.feedback)
     .map((f, i) => ({
