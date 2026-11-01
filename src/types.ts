@@ -1,6 +1,26 @@
 export type Limb = 'lh' | 'rh' | 'lf' | 'rf'
 
+/** Role of a hold on the suggested route. */
 export type HoldKind = 'start' | 'hand' | 'foot' | 'finish' | 'off'
+
+/**
+ * Physical hold type (what the hold IS). Estimated from detected geometry —
+ * SAM 3.1 segments holds but does not classify them, so `type` is a heuristic
+ * guess from box shape/size and is labelled "estimated" in the UI.
+ */
+export type HoldType =
+  | 'jug'
+  | 'crimp'
+  | 'sloper'
+  | 'pinch'
+  | 'pocket'
+  | 'edge'
+  | 'sidepull'
+  | 'gaston'
+  | 'undercling'
+  | 'foothold'
+  | 'volume'
+  | 'unknown'
 
 export interface Point {
   x: number
@@ -15,6 +35,10 @@ export interface Hold extends Point {
   rx: number
   ry: number
   rot: number
+  /** estimated physical hold type (jug, crimp, sloper…) */
+  type?: HoldType
+  /** hex colour for the hold glyph (falls back to a per-type default) */
+  color?: string
 }
 
 /** A limb is either on a hold (by id) or at a free point (flag / smear). */
@@ -83,6 +107,15 @@ export interface Metric {
   note: string
 }
 
+/** A climber-friendly readout (Confidence, Stability, Balance, Body position). */
+export interface ClimberStat {
+  id: string
+  label: string
+  value: string
+  level: 'good' | 'ok' | 'warn'
+  hint: string
+}
+
 /** Where an analysis came from, so the UI can be honest about it. */
 export type AnalysisSource = 'demo' | 'ai'
 
@@ -106,6 +139,8 @@ export interface Analysis {
     holdsDetected: number
   }
   metrics: Metric[]
+  /** climber-friendly readouts (confidence, stability, balance, position) */
+  climberStats?: ClimberStat[]
   holds: Hold[]
   beta: BetaStep[]
   feedback: FeedbackItem[]

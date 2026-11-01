@@ -14,6 +14,7 @@ import type { PoseTrack } from './pose-estimation'
 import type { MovementObservations } from './movement'
 import { nearestHold } from './holds'
 import type { HoldDetection } from './holds'
+import { climberSummary } from './climberMetrics'
 import type {
   Analysis,
   BetaStep,
@@ -339,6 +340,7 @@ export function buildAnalysis(
       holdsDetected: hasDetection ? holds.length : 0,
     },
     metrics: coach.metrics,
+    climberStats: climberSummary(obs.biomechanics, obs.detectionRate),
     holds,
     beta,
     feedback: coach.feedback,

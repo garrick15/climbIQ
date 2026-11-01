@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import type { BetaStep, Hold, Limb, Point } from '../types'
 import { LIMB_LABEL, LIMBS, arcPath, buildPose, holdMap, movedLimbs, resolveTarget } from '../lib/pose'
 import type { Pose } from '../lib/pose'
+import { HoldShape } from './HoldShape'
 
 const W = 360
 const H = 540
@@ -162,46 +163,54 @@ export function BetaWall({ holds, steps, stepIndex, className }: Props) {
       <rect width={W} height={H} rx={18} fill="url(#tnuts)" />
       <rect x={0.5} y={0.5} width={W - 1} height={H - 1} rx={17.5} fill="none" stroke="rgba(255,255,255,0.08)" />
 
-      {/* holds */}
+      {/* holds — drawn as typed, coloured shapes (jug/crimp/sloper/…) */}
       {holds.map((h) => {
         const isTarget = view.targets.has(h.id)
         const isHeld = view.current.has(h.id)
         const wasUsed = view.used.has(h.id)
         const route = h.kind !== 'off'
-        const fill = isTarget
-          ? '#a78bfa'
-          : isHeld
-            ? 'rgba(167,139,250,0.55)'
-            : wasUsed
-              ? '#4a5272'
-              : route
-                ? '#343c58'
-                : '#1d2336'
-        const stroke = isTarget ? '#ede9fe' : route ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.07)'
-        return (
-          <g key={h.id}>
-            {isTarget && (
+        const type = h.type ?? 'unknown'
+
+        // Off-route holds and not-yet-used holds are dimmed so the active line
+        // reads clearly; the current target is full-strength + pulsing.
+        const opacity = isTarget || isHeld ? 1 : wasUsed ? 0.85 : route ? 0.6 : 0.3
+
+        // Unknown-type holds (e.g. suggested targets with no shape) fall back
+        // to the simple role-coloured ellipse.
+        if (type === 'unknown') {
+          const fill = isTarget ? '#a78bfa' : isHeld ? 'rgba(167,139,250,0.55)' : route ? '#343c58' : '#1d2336'
+          return (
+            <g key={h.id}>
+              {isTarget && (
+                <ellipse className="svg-pulse" cx={h.x} cy={h.y} rx={h.rx + 6} ry={h.ry + 6} fill="none" stroke="#a78bfa" strokeWidth={1.6} />
+              )}
               <ellipse
-                className="svg-pulse"
                 cx={h.x}
                 cy={h.y}
-                rx={h.rx + 6}
-                ry={h.ry + 6}
-                fill="none"
-                stroke="#a78bfa"
-                strokeWidth={1.6}
+                rx={h.rx}
+                ry={h.ry}
+                transform={`rotate(${h.rot} ${h.x} ${h.y})`}
+                fill={fill}
+                stroke={isTarget ? '#ede9fe' : 'rgba(255,255,255,0.14)'}
+                strokeWidth={isTarget ? 1.8 : 1}
+                filter={isTarget ? 'url(#glow)' : undefined}
               />
-            )}
-            <ellipse
+            </g>
+          )
+        }
+
+        return (
+          <g key={h.id} filter={isTarget ? 'url(#glow)' : undefined}>
+            <HoldShape
+              type={type}
               cx={h.x}
               cy={h.y}
               rx={h.rx}
               ry={h.ry}
-              transform={`rotate(${h.rot} ${h.x} ${h.y})`}
-              fill={fill}
-              stroke={stroke}
-              strokeWidth={isTarget ? 1.8 : 1}
-              filter={isTarget ? 'url(#glow)' : undefined}
+              rot={h.rot}
+              color={h.color}
+              opacity={opacity}
+              highlighted={isTarget}
             />
           </g>
         )

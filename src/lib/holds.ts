@@ -10,6 +10,7 @@
 import { extractFrameAt } from './frames'
 import type { PoseTrack, BBox } from './pose-estimation'
 import type { Hold, HoldKind } from '../types'
+import { estimateHoldType, HOLD_COLOR } from './holdTypes'
 
 // The BetaWall renders in a fixed 360×540 box (see BetaWall.tsx W/H).
 const WALL_W = 360
@@ -70,15 +71,19 @@ function boxToHold(b: DetectedBox, i: number): Hold {
   const cy = (b.y + b.h / 2) * WALL_H
   const rx = Math.max(6, (b.w * WALL_W) / 2)
   const ry = Math.max(5, (b.h * WALL_H) / 2)
+  // Estimate the physical hold type from the (normalised) box geometry.
+  const type = estimateHoldType({ w: b.w, h: b.h })
   return {
     id: `d${i}`,
     name: 'Detected hold',
     x: cx,
     y: cy,
     kind: 'hand' as HoldKind, // refined later by assignment to limbs/route
-    rx: Math.min(rx, 20),
-    ry: Math.min(ry, 16),
+    rx: Math.min(rx, 22),
+    ry: Math.min(ry, 18),
     rot: 0,
+    type,
+    color: HOLD_COLOR[type],
   }
 }
 

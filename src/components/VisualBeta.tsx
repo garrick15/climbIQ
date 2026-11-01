@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { ArrowLeft, ArrowRight, Pause, Play } from 'lucide-react'
 import type { Analysis } from '../types'
 import { LIMBS, LIMB_LABEL, LIMB_NAME, holdMap, movedLimbs } from '../lib/pose'
+import { HOLD_LABEL } from '../lib/holdTypes'
 import { BetaWall } from './BetaWall'
 import { Card, Eyebrow, TimeChip, cx } from './ui'
 
@@ -132,7 +133,9 @@ export function VisualBeta({ analysis, stepIndex, onStep, onSeek, followVideo }:
         <div className="mt-5 grid grid-cols-2 gap-2">
           {LIMBS.map((l) => {
             const t = step.limbs[l]
-            const label = typeof t === 'string' ? (names.get(t)?.name ?? t) : 'Free position'
+            const heldHold = typeof t === 'string' ? names.get(t) : undefined
+            const label = heldHold?.name ?? (typeof t === 'string' ? t : 'Free position')
+            const holdType = heldHold?.type && heldHold.type !== 'unknown' ? HOLD_LABEL[heldHold.type] : null
             const isMoved = moved.includes(l) || stepIndex === 0
             return (
               <div
@@ -144,9 +147,16 @@ export function VisualBeta({ analysis, stepIndex, onStep, onSeek, followVideo }:
               >
                 <div className="flex items-center justify-between">
                   <span className="font-mono text-[10px] tracking-wider text-slate-500">{LIMB_LABEL[l]}</span>
-                  {isMoved && stepIndex > 0 && (
+                  {holdType ? (
+                    <span
+                      className="rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide"
+                      style={{ background: `${heldHold!.color ?? '#5b6480'}33`, color: heldHold!.color ?? '#c4b5fd' }}
+                    >
+                      {holdType}
+                    </span>
+                  ) : isMoved && stepIndex > 0 ? (
                     <span className="text-[10px] font-medium uppercase tracking-wide text-accent-300">Moves</span>
-                  )}
+                  ) : null}
                 </div>
                 <p className="mt-0.5 truncate text-[13px] font-medium text-slate-100" title={`${LIMB_NAME[l]}: ${label}`}>
                   {label}
