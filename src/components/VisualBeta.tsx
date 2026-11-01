@@ -18,8 +18,21 @@ interface Props {
 export function VisualBeta({ analysis, stepIndex, onStep, onSeek, followVideo }: Props) {
   const { beta, holds } = analysis
   const [auto, setAuto] = useState(false)
-  const step = beta[stepIndex]
-  const prev = stepIndex > 0 ? beta[stepIndex - 1] : undefined
+
+  // Empty beta → nothing to visualise (don't crash).
+  if (beta.length === 0) {
+    return (
+      <Card className="p-6 text-center text-sm text-slate-400">
+        No suggested moves for this {analysis.source === 'ai' ? 'route' : 'climb'}. Try a clearer, straight-on photo
+        of the wall (or a side-on clip for a climb).
+      </Card>
+    )
+  }
+
+  // Clamp the incoming index so an out-of-range value can never read undefined.
+  const safeIndex = Math.min(Math.max(0, stepIndex), beta.length - 1)
+  const step = beta[safeIndex]
+  const prev = safeIndex > 0 ? beta[safeIndex - 1] : undefined
   const names = holdMap(holds)
   const moved = movedLimbs(prev?.limbs, step.limbs)
   const last = beta.length - 1
@@ -45,15 +58,15 @@ export function VisualBeta({ analysis, stepIndex, onStep, onSeek, followVideo }:
       tabIndex={0}
       aria-label="Visual beta. Use the left and right arrow keys to change move."
       onKeyDown={(e) => {
-        if (e.key === 'ArrowRight') go(stepIndex + 1)
-        if (e.key === 'ArrowLeft') go(stepIndex - 1)
+        if (e.key === 'ArrowRight') go(safeIndex + 1)
+        if (e.key === 'ArrowLeft') go(safeIndex - 1)
       }}
     >
       <div className="mx-auto w-full max-w-[340px] lg:mx-0">
         <BetaWall
           holds={holds}
           steps={beta}
-          stepIndex={stepIndex}
+          stepIndex={safeIndex}
           className="w-full rounded-[18px] shadow-[0_24px_60px_-24px_rgb(0_0_0/0.8)]"
         />
         <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 px-1 text-[11px] text-slate-400">
@@ -83,7 +96,7 @@ export function VisualBeta({ analysis, stepIndex, onStep, onSeek, followVideo }:
           <div>
             <div className="flex items-center gap-2">
               <Eyebrow>
-                Move {stepIndex + 1} of {beta.length}
+                Move {safeIndex + 1} of {beta.length}
               </Eyebrow>
               {followVideo && (
                 <span className="inline-flex items-center gap-1 rounded-full border border-good/40 bg-good/15 px-2 py-0.5 text-[10px] font-medium text-good">
@@ -111,15 +124,15 @@ export function VisualBeta({ analysis, stepIndex, onStep, onSeek, followVideo }:
               onClick={() => go(i)}
               title={`${i + 1}. ${s.title}`}
               aria-label={`Go to move ${i + 1}: ${s.title}`}
-              aria-current={i === stepIndex ? 'step' : undefined}
+              aria-current={i === safeIndex ? 'step' : undefined}
               className="group flex-1 py-2"
             >
               <span
                 className={cx(
                   'block h-1.5 rounded-full transition-colors',
-                  i === stepIndex
+                  i === safeIndex
                     ? 'bg-accent-400'
-                    : i < stepIndex
+                    : i < safeIndex
                       ? 'bg-accent-600/60'
                       : 'bg-white/10 group-hover:bg-white/20',
                 )}
@@ -136,7 +149,7 @@ export function VisualBeta({ analysis, stepIndex, onStep, onSeek, followVideo }:
             const heldHold = typeof t === 'string' ? names.get(t) : undefined
             const label = heldHold?.name ?? (typeof t === 'string' ? t : 'Free position')
             const holdType = heldHold?.type && heldHold.type !== 'unknown' ? HOLD_LABEL[heldHold.type] : null
-            const isMoved = moved.includes(l) || stepIndex === 0
+            const isMoved = moved.includes(l) || safeIndex === 0
             return (
               <div
                 key={l}
@@ -158,7 +171,7 @@ export function VisualBeta({ analysis, stepIndex, onStep, onSeek, followVideo }:
                       )}
                       {holdType}
                     </span>
-                  ) : isMoved && stepIndex > 0 ? (
+                  ) : isMoved && safeIndex > 0 ? (
                     <span className="text-[10px] font-medium uppercase tracking-wide text-accent-300">Moves</span>
                   ) : null}
                 </div>
@@ -201,8 +214,8 @@ export function VisualBeta({ analysis, stepIndex, onStep, onSeek, followVideo }:
           <div className="flex gap-2">
             <button
               type="button"
-              onClick={() => go(stepIndex - 1)}
-              disabled={stepIndex === 0}
+              onClick={() => go(safeIndex - 1)}
+              disabled={safeIndex === 0}
               aria-label="Previous move"
               className="grid h-9 w-9 place-items-center rounded-lg border bg-white/[0.04] text-slate-200 transition-colors hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-35"
             >
@@ -210,8 +223,8 @@ export function VisualBeta({ analysis, stepIndex, onStep, onSeek, followVideo }:
             </button>
             <button
               type="button"
-              onClick={() => go(stepIndex + 1)}
-              disabled={stepIndex === last}
+              onClick={() => go(safeIndex + 1)}
+              disabled={safeIndex === last}
               aria-label="Next move"
               className="inline-flex h-9 items-center gap-2 rounded-lg bg-accent-600 px-3.5 text-sm font-medium text-white transition-colors hover:bg-accent-500 disabled:cursor-not-allowed disabled:opacity-40"
             >

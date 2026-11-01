@@ -235,6 +235,27 @@ function buildPhotoAnalysis(
         } as BetaStep
       })
 
+  // Never return an empty beta — the Visual Beta reads beta[stepIndex].
+  if (beta.length === 0) {
+    beta.push({
+      id: 'step-1',
+      title: 'No route found',
+      summary: 'We could not plan a route from this photo. Try a clearer, straight-on shot of the wall.',
+      bodyPosition: '',
+      why: '',
+      yourAttempt: '',
+      timestamp: 0,
+      limbs: {
+        lh: { x: WALL_W * 0.4, y: WALL_H * 0.4 },
+        rh: { x: WALL_W * 0.6, y: WALL_H * 0.4 },
+        lf: { x: WALL_W * 0.42, y: WALL_H * 0.82 },
+        rf: { x: WALL_W * 0.58, y: WALL_H * 0.82 },
+      },
+      hipShift: 0,
+      cue: { text: '', side: 'right' },
+    })
+  }
+
   return {
     source: 'ai',
     provenance: {
