@@ -237,8 +237,10 @@ export function analyseMovement(track: PoseTrack): MovementObservations | null {
     }
   }
 
-  // ── Downsample per-frame series for the prompt (≤ 40 points) ─────────
-  const stride = Math.max(1, Math.ceil(valid.length / 40))
+  // ── Downsample per-frame series for the prompt (≤ 20 points) ─────────
+  // Smaller = fewer input tokens = faster model response (keeps us under the
+  // serverless time limit). The biomechanics summary carries the detail.
+  const stride = Math.max(1, Math.ceil(valid.length / 20))
   const samples = valid
     .filter((_, i) => i % stride === 0)
     .map((m) => ({

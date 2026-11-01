@@ -116,7 +116,9 @@ export async function analyseClimb(opts: {
     // Grab a few frames for visual grounding (optional; best-effort).
     let frames: string[] = []
     try {
-      frames = await sampleFrames(file, 4, signal)
+      // Keep this small: images dominate request size/latency and the function
+      // must respond within the serverless time limit (~10s on Netlify free).
+      frames = await sampleFrames(file, 2, signal)
     } catch {
       frames = []
     }
@@ -126,7 +128,7 @@ export async function analyseClimb(opts: {
       ? {
           detected: true,
           count: detection.holds.length,
-          positions: detection.holds.slice(0, 30).map((h) => ({
+          positions: detection.holds.slice(0, 20).map((h) => ({
             id: h.id,
             x: Math.round((h.x / 360) * 100) / 100,
             y: Math.round((h.y / 540) * 100) / 100,
@@ -156,6 +158,11 @@ export async function analyseClimb(opts: {
       if (err.error === 'missing_api_key') {
         return fallback(
           'No Meta API key is configured yet, so this is sample coaching. Add META_API_KEY to enable real analysis.',
+        )
+      }
+      if (res.status === 504 || res.status === 502) {
+        return fallback(
+          'The coaching model took too long to respond on this clip (server timeout). Showing sample data — try a shorter clip.',
         )
       }
       const detail = err.detail ? ` Detail: ${String(err.detail).slice(0, 300)}` : ''

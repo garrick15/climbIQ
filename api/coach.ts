@@ -282,7 +282,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         'Produce the coaching JSON for this attempt.',
     },
   ]
-  for (const dataUrl of (payload.frames ?? []).slice(0, 6)) {
+  for (const dataUrl of (payload.frames ?? []).slice(0, 2)) {
     content.push({ type: 'image_url', image_url: { url: dataUrl } })
   }
 
@@ -298,8 +298,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       { role: 'user', content },
     ],
     temperature: 0.4,
-    // Large: the full analysis is long; too small truncates the JSON.
-    max_tokens: 8000,
+    reasoning_effort: 'low',
+    // Bounded to finish inside the serverless time limit; prompt keeps output tight.
+    max_tokens: 3000,
     ...(useSchema
       ? {
           response_format: {
