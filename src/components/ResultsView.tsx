@@ -4,9 +4,11 @@ import type { Analysis } from '../types'
 import { usePlayer } from '../lib/usePlayer'
 import { formatTime } from '../lib/video'
 import type { PoseTrack } from '../lib/pose-estimation'
+import { PlayCircle } from 'lucide-react'
 import { FeedbackPanel } from './FeedbackPanel'
 import { VideoPanel } from './VideoPanel'
 import { MoveCoachPanel } from './MoveCoachPanel'
+import { BetaDemo } from './BetaDemo'
 import { Card, Meter, cx } from './ui'
 
 type Tab = 'beta' | 'feedback'
@@ -23,6 +25,7 @@ export function ResultsView({ analysis, videoUrl, fileName, fallbackReason, pose
   const player = usePlayer(videoUrl, analysis.climb.durationSec)
   const [tab, setTab] = useState<Tab>('beta')
   const [stepIndex, setStepIndex] = useState(0)
+  const [showDemo, setShowDemo] = useState(false)
   // When true, the Visual Beta follows the video; a manual move pick pauses it.
   const [followVideo, setFollowVideo] = useState(true)
 
@@ -117,33 +120,47 @@ export function ResultsView({ analysis, videoUrl, fileName, fallbackReason, pose
         </div>
       </div>
 
-      {/* Tab switch: watch the annotated climb (Visual Beta) or read Feedback. */}
-      <div className="mt-4 inline-flex rounded-xl border bg-ink-850 p-1" role="tablist" aria-label="Coaching output">
-        {tabs.map((t) => {
-          const Icon = t.icon
-          const active = tab === t.id
-          return (
-            <button
-              key={t.id}
-              type="button"
-              role="tab"
-              id={`tab-${t.id}`}
-              aria-selected={active}
-              aria-controls={`tabpanel-${t.id}`}
-              onClick={() => setTab(t.id)}
-              className={cx(
-                'inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors',
-                active ? 'bg-accent-600 text-white' : 'text-slate-400 hover:bg-white/[0.04] hover:text-slate-200',
-              )}
-            >
-              <Icon className="h-4 w-4" aria-hidden />
-              {t.label}
-              <span className={cx('font-mono text-[10px]', active ? 'text-white/70' : 'text-slate-600')}>
-                {t.id === 'feedback' ? `${improve} to fix` : t.hint}
-              </span>
-            </button>
-          )
-        })}
+      {/* Tab switch + "Demonstrate" launcher. */}
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="inline-flex rounded-xl border bg-ink-850 p-1" role="tablist" aria-label="Coaching output">
+          {tabs.map((t) => {
+            const Icon = t.icon
+            const active = tab === t.id
+            return (
+              <button
+                key={t.id}
+                type="button"
+                role="tab"
+                id={`tab-${t.id}`}
+                aria-selected={active}
+                aria-controls={`tabpanel-${t.id}`}
+                onClick={() => setTab(t.id)}
+                className={cx(
+                  'inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors',
+                  active ? 'bg-accent-600 text-white' : 'text-slate-400 hover:bg-white/[0.04] hover:text-slate-200',
+                )}
+              >
+                <Icon className="h-4 w-4" aria-hidden />
+                {t.label}
+                <span className={cx('font-mono text-[10px]', active ? 'text-white/70' : 'text-slate-600')}>
+                  {t.id === 'feedback' ? `${improve} to fix` : t.hint}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+
+        {/* Stuck? Watch the whole suggested beta play out. */}
+        {analysis.beta.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setShowDemo(true)}
+            className="inline-flex items-center gap-2 rounded-xl border border-accent-500/40 bg-accent-500/15 px-4 py-2 text-sm font-semibold text-accent-100 transition-colors hover:bg-accent-500/25"
+          >
+            <PlayCircle className="h-4 w-4" aria-hidden />
+            Demonstrate the beta
+          </button>
+        )}
       </div>
 
       {tab === 'beta' ? (
@@ -193,6 +210,8 @@ export function ResultsView({ analysis, videoUrl, fileName, fallbackReason, pose
           </Card>
         ))}
       </div>
+
+      {showDemo && <BetaDemo analysis={analysis} onClose={() => setShowDemo(false)} />}
     </div>
   )
 }
