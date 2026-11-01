@@ -59,19 +59,21 @@ BETA — one step per detected move, in order. For EACH step provide:
 - "coachNote": one friendly sentence of direct coaching for this move.
 - "successRate": integer 0-100, your estimate that the recommended move succeeds.
 
-FEEDBACK — keep it SHORT and ACTIONABLE. 3-5 items max. Each:
+FEEDBACK — REQUIRED, never empty. Produce this BEFORE the beta. 3-5 short,
+actionable items. Each:
 - "title": the verdict headline (e.g. "Drop your heel on the crux").
 - "observation": ONE short sentence of what happened.
 - "tryThis": ONE direct instruction to fix/keep it (always present for "improve").
-- "why": ONE short sentence. "kind": "strength" or "improve". Include >=1 strength.
-- "timestamp" + "skill". Do not pad. Prefer imperative voice ("Keep your hips in", not
-  "The climber's hips drifted").
+- "why": ONE short sentence. "kind": "strength" or "improve". Include >=1 strength
+  and >=1 improve. "timestamp" + "skill". Prefer imperative voice ("Keep your hips in").
 
 metrics: EXACTLY 3-4 items, each an object with "label" (a skill name like
 "Movement fluency", "Body positioning", "Footwork", "Arm efficiency"), "value" (an
 INTEGER 0-100 scoring that skill on this climb), and "note" (one short sentence).
 Use those exact keys. Never leave value as 0 unless the climb truly warrants it.
-Never return empty strings. Be specific and useful over verbose.
+
+OUTPUT ORDER: climb, metrics, feedback, THEN beta, then training. Always fully
+complete feedback before starting beta. Never return empty strings.
 
 Return ONLY valid JSON matching the provided schema. No prose outside the JSON.`
 
@@ -79,7 +81,11 @@ Return ONLY valid JSON matching the provided schema. No prose outside the JSON.`
 const RESPONSE_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['climb', 'metrics', 'beta', 'feedback', 'training'],
+  // Order matters: structured-output generation follows property order, so put
+  // the climber-facing FEEDBACK before the token-heavy BETA — if the model runs
+  // low on budget, feedback is already written (it used to come after beta and
+  // got truncated away, leaving the Feedback tab empty).
+  required: ['climb', 'metrics', 'feedback', 'beta', 'training'],
   properties: {
     climb: {
       type: 'object',
@@ -103,6 +109,24 @@ const RESPONSE_SCHEMA = {
           label: { type: 'string' },
           value: { type: 'number' },
           note: { type: 'string' },
+        },
+      },
+    },
+    feedback: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['id', 'kind', 'timestamp', 'title', 'observation', 'why', 'skill'],
+        properties: {
+          id: { type: 'string' },
+          kind: { type: 'string', enum: ['strength', 'improve'] },
+          timestamp: { type: 'number' },
+          title: { type: 'string' },
+          observation: { type: 'string' },
+          why: { type: 'string' },
+          tryThis: { type: 'string' },
+          skill: { type: 'string' },
         },
       },
     },
@@ -130,24 +154,6 @@ const RESPONSE_SCHEMA = {
           recommendedWins: { type: 'array', items: { type: 'string' } },
           coachNote: { type: 'string' },
           successRate: { type: 'number' },
-        },
-      },
-    },
-    feedback: {
-      type: 'array',
-      items: {
-        type: 'object',
-        additionalProperties: false,
-        required: ['id', 'kind', 'timestamp', 'title', 'observation', 'why', 'skill'],
-        properties: {
-          id: { type: 'string' },
-          kind: { type: 'string', enum: ['strength', 'improve'] },
-          timestamp: { type: 'number' },
-          title: { type: 'string' },
-          observation: { type: 'string' },
-          why: { type: 'string' },
-          tryThis: { type: 'string' },
-          skill: { type: 'string' },
         },
       },
     },
@@ -335,7 +341,7 @@ export default async function handler(req: Request, _context: Context): Promise<
         role: 'system',
         content: useSchema
           ? SYSTEM_PROMPT
-          : `${SYSTEM_PROMPT}\n\nOutput ONLY a single JSON object with keys: climb, metrics, beta, feedback, training. No markdown, no code fences, no prose.`,
+          : `${SYSTEM_PROMPT}\n\nOutput ONLY a single JSON object with keys in THIS order: climb, metrics, feedback, beta, training. No markdown, no code fences, no prose.`,
       },
       { role: 'user', content },
     ],
@@ -343,9 +349,9 @@ export default async function handler(req: Request, _context: Context): Promise<
     // Keep reasoning light so the call returns within the function budget
     // (ignored by providers that don't support it).
     reasoning_effort: 'low',
-    // Bounded so generation completes inside the ~26s sync-function ceiling;
-    // the prompt keeps output concise so it isn't truncated.
-    max_tokens: 3000,
+    // Enough for feedback + beta without truncation, still well inside the ~26s
+    // sync-function ceiling (text-only request keeps the call fast).
+    max_tokens: 4500,
     ...(useSchema
       ? {
           response_format: {
