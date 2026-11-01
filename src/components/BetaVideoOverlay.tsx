@@ -54,10 +54,13 @@ export function BetaVideoOverlay({ analysis, activeStep, box, video }: Props) {
   const toDisp = (wx: number, wy: number) => fit(wx / WALL_W, wy / WALL_H, video, box)
 
   const limbs: Limb[] = ['lh', 'rh', 'lf', 'rf']
-  const moved = limbs.filter((l) => {
-    if (!prev) return true
-    return JSON.stringify(prev.limbs[l]) !== JSON.stringify(step.limbs[l])
-  })
+  // Prefer the coach-declared moving limb; else fall back to what changed.
+  const moved: Limb[] = step.moveLimb
+    ? [step.moveLimb as Limb]
+    : limbs.filter((l) => {
+        if (!prev) return true
+        return JSON.stringify(prev.limbs[l]) !== JSON.stringify(step.limbs[l])
+      })
 
   // Target holds for this move (where moved limbs are going).
   const targets = moved

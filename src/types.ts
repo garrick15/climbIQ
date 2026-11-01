@@ -55,6 +55,18 @@ export interface Hold extends Point {
 export type LimbTarget = string | Point
 export type LimbState = Record<Limb, LimbTarget>
 
+/**
+ * Chess.com-style verdict on how the climber played this move.
+ *   best        — the strong, efficient option
+ *   good        — solid
+ *   inaccuracy  — worked but cost energy/position
+ *   mistake     — a real error that made the climb harder
+ */
+export type MoveRating = 'best' | 'good' | 'inaccuracy' | 'mistake'
+
+/** Which limb performs the move, for a direct "do this" instruction. */
+export type MoveLimb = 'lh' | 'rh' | 'lf' | 'rf'
+
 export interface BetaStep {
   id: string
   title: string
@@ -72,6 +84,16 @@ export interface BetaStep {
   hipShift: number
   cue: { text: string; side: 'left' | 'right' }
   crux?: boolean
+
+  // ── Chess.com-style coaching (the "coach, not detector" layer) ──────────
+  /** the single clear instruction for this move, e.g. "Right hand to the sloper" */
+  instruction?: string
+  /** which limb makes the move (drives the action card + arrow emphasis) */
+  moveLimb?: MoveLimb
+  /** short verdict on the climber's execution of this move */
+  rating?: MoveRating
+  /** one-line reason the recommended move is right (the "why") */
+  reason?: string
 }
 
 export type FeedbackKind = 'strength' | 'improve'

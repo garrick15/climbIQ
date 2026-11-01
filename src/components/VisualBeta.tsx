@@ -1,10 +1,27 @@
 import { useEffect, useState } from 'react'
 import { ArrowLeft, ArrowRight, Pause, Play } from 'lucide-react'
 import type { Analysis } from '../types'
+import type { MoveRating } from '../types'
 import { LIMBS, LIMB_LABEL, LIMB_NAME, holdMap, movedLimbs } from '../lib/pose'
 import { HOLD_LABEL } from '../lib/holdTypes'
 import { BetaWall } from './BetaWall'
 import { Card, Eyebrow, TimeChip, cx } from './ui'
+
+const RATING_META: Record<MoveRating, { label: string; cls: string; dot: string }> = {
+  best: { label: 'Best move', cls: 'bg-good/20 text-good border-good/40', dot: 'bg-good' },
+  good: { label: 'Good', cls: 'bg-accent-500/20 text-accent-200 border-accent-500/40', dot: 'bg-accent-400' },
+  inaccuracy: { label: 'Inaccuracy', cls: 'bg-warn/20 text-warn border-warn/40', dot: 'bg-warn' },
+  mistake: { label: 'Mistake', cls: 'bg-red-400/20 text-red-300 border-red-400/40', dot: 'bg-red-400' },
+}
+
+function RatingBadge({ rating }: { rating: MoveRating }) {
+  const m = RATING_META[rating]
+  return (
+    <span className={cx('shrink-0 rounded-lg border px-2 py-1 text-[10px] font-bold uppercase tracking-wide', m.cls)}>
+      {m.label}
+    </span>
+  )
+}
 
 interface Props {
   analysis: Analysis
@@ -129,53 +146,74 @@ export function VisualBeta({ analysis, stepIndex, onStep, onSeek, followVideo }:
               <span
                 className={cx(
                   'block h-1.5 rounded-full transition-colors',
-                  i === safeIndex
-                    ? 'bg-accent-400'
-                    : i < safeIndex
-                      ? 'bg-accent-600/60'
+                  // Colour each move's dot by its chess.com-style rating so the
+                  // whole climb reads at a glance; current move is brightest.
+                  s.rating
+                    ? RATING_META[s.rating].dot
+                    : i <= safeIndex
+                      ? 'bg-accent-400'
                       : 'bg-white/10 group-hover:bg-white/20',
+                  i === safeIndex ? 'ring-2 ring-white/50' : i > safeIndex && !s.rating ? '' : 'opacity-80',
                 )}
               />
             </button>
           ))}
         </div>
 
-        <p className="mt-2 text-[15px] leading-relaxed text-slate-100">{step.summary}</p>
+        {/* Chess.com-style instruction: verdict + the one directive + why. */}
+        <div className="mt-3 rounded-xl border border-accent-500/20 bg-accent-500/[0.06] p-4">
+          <div className="flex items-start gap-3">
+            {step.rating && <RatingBadge rating={step.rating} />}
+            <div className="min-w-0">
+              <p className="text-[15px] font-semibold leading-snug text-white">
+                {step.instruction || step.summary}
+              </p>
+              {(step.reason || step.why) && (
+                <p className="mt-1.5 text-[13px] leading-relaxed text-slate-300">
+                  <span className="font-medium text-accent-200">Why: </span>
+                  {step.reason || step.why}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
 
-        <div className="mt-5 grid grid-cols-2 gap-2">
+        {/* What each limb does this move — the action, not a static label. */}
+        <div className="mt-4 grid grid-cols-2 gap-2">
           {LIMBS.map((l) => {
             const t = step.limbs[l]
             const heldHold = typeof t === 'string' ? names.get(t) : undefined
-            const label = heldHold?.name ?? (typeof t === 'string' ? t : 'Free position')
+            const label = heldHold?.name ?? (typeof t === 'string' ? t : 'free')
             const holdType = heldHold?.type && heldHold.type !== 'unknown' ? HOLD_LABEL[heldHold.type] : null
-            const isMoved = moved.includes(l) || safeIndex === 0
+            const isMover = step.moveLimb ? step.moveLimb === l : moved.includes(l) || safeIndex === 0
             return (
               <div
                 key={l}
                 className={cx(
                   'rounded-xl border px-3 py-2.5 transition-colors',
-                  isMoved ? 'border-accent-500/40 bg-accent-500/10' : 'bg-white/[0.02]',
+                  isMover ? 'border-accent-500/50 bg-accent-500/12' : 'bg-white/[0.02]',
                 )}
               >
                 <div className="flex items-center justify-between">
                   <span className="font-mono text-[10px] tracking-wider text-slate-500">{LIMB_LABEL[l]}</span>
-                  {holdType ? (
-                    <span className="inline-flex items-center gap-1 rounded bg-accent-500/20 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-accent-200">
-                      {heldHold?.color && (
-                        <span
-                          className="h-2 w-2 rounded-full ring-1 ring-white/30"
-                          style={{ background: heldHold.color }}
-                          title={heldHold.routeColor ? `${heldHold.routeColor} hold` : 'hold colour'}
-                        />
-                      )}
-                      {holdType}
-                    </span>
-                  ) : isMoved && safeIndex > 0 ? (
-                    <span className="text-[10px] font-medium uppercase tracking-wide text-accent-300">Moves</span>
-                  ) : null}
+                  <span
+                    className={cx(
+                      'text-[9px] font-semibold uppercase tracking-wide',
+                      isMover ? 'text-accent-300' : 'text-slate-600',
+                    )}
+                  >
+                    {isMover ? '● Move' : 'Stay'}
+                  </span>
                 </div>
-                <p className="mt-0.5 truncate text-[13px] font-medium text-slate-100" title={`${LIMB_NAME[l]}: ${label}`}>
-                  {label}
+                <p className="mt-0.5 flex items-center gap-1.5 truncate text-[13px] font-medium text-slate-100" title={`${LIMB_NAME[l]}: ${label}`}>
+                  {heldHold?.color && (
+                    <span className="h-2 w-2 shrink-0 rounded-full ring-1 ring-white/30" style={{ background: heldHold.color }} />
+                  )}
+                  <span className="truncate">
+                    {isMover ? '→ ' : ''}
+                    {label}
+                    {holdType ? ` · ${holdType}` : ''}
+                  </span>
                 </p>
               </div>
             )
@@ -183,20 +221,20 @@ export function VisualBeta({ analysis, stepIndex, onStep, onSeek, followVideo }:
         </div>
 
         <dl className="mt-5 space-y-4 text-sm leading-relaxed">
-          <div>
-            <dt className="text-[11px] font-medium uppercase tracking-wider text-slate-500">Body position</dt>
-            <dd className="mt-1 text-slate-300">{step.bodyPosition}</dd>
-          </div>
-          <div>
-            <dt className="text-[11px] font-medium uppercase tracking-wider text-slate-500">Why it works</dt>
-            <dd className="mt-1 text-slate-300">{step.why}</dd>
-          </div>
+          {step.bodyPosition && (
+            <div>
+              <dt className="text-[11px] font-medium uppercase tracking-wider text-slate-500">Body position</dt>
+              <dd className="mt-1 text-slate-300">{step.bodyPosition}</dd>
+            </div>
+          )}
         </dl>
 
         <div className="mt-5 flex items-start justify-between gap-3 rounded-xl border bg-white/[0.025] p-3.5">
           <div className="min-w-0">
             <p className="text-[11px] font-medium uppercase tracking-wider text-slate-500">What you did</p>
-            <p className="mt-1 text-[13px] leading-relaxed text-slate-300">{step.yourAttempt}</p>
+            <p className="mt-1 text-[13px] leading-relaxed text-slate-300">
+              {step.yourAttempt || 'Jump to this moment to compare your movement with the suggestion.'}
+            </p>
           </div>
           <TimeChip t={step.timestamp} onClick={onSeek} />
         </div>

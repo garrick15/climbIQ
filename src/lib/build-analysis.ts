@@ -189,15 +189,22 @@ function normaliseCoach(raw: unknown, obs: MovementObservations): CoachOutput {
   const c = (raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}) as Record<string, unknown>
   const climb = (c.climb && typeof c.climb === 'object' ? (c.climb as Record<string, unknown>) : {}) as Record<string, unknown>
 
+  const MOVE_LIMBS = ['lh', 'rh', 'lf', 'rf']
+  const RATINGS = ['best', 'good', 'inaccuracy', 'mistake']
   const beta = asArray<Record<string, unknown>>(c.beta).map((s, i) => ({
     id: asStr(s.id) || `step-${i + 1}`,
     title: asStr(s.title, `Move ${i + 1}`),
-    summary: asStr(s.summary),
+    summary: asStr(s.summary) || asStr(s.instruction),
     bodyPosition: asStr(s.bodyPosition),
-    why: asStr(s.why),
+    why: asStr(s.why) || asStr(s.reason),
     yourAttempt: asStr(s.yourAttempt),
     timestamp: asNum(s.timestamp, (i / Math.max(1, asArray(c.beta).length)) * obs.durationSec),
     crux: typeof s.crux === 'boolean' ? s.crux : undefined,
+    // chess.com-style coaching fields
+    instruction: asStr(s.instruction) || asStr(s.summary),
+    moveLimb: MOVE_LIMBS.includes(asStr(s.moveLimb)) ? (asStr(s.moveLimb) as 'lh' | 'rh' | 'lf' | 'rf') : undefined,
+    rating: RATINGS.includes(asStr(s.rating)) ? (asStr(s.rating) as 'best' | 'good' | 'inaccuracy' | 'mistake') : undefined,
+    reason: asStr(s.reason) || asStr(s.why),
   }))
 
   const metrics = asArray<Record<string, unknown>>(c.metrics).map((m, i) => ({
