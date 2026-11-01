@@ -54,6 +54,26 @@ export default function App() {
     [releaseUrl],
   )
 
+  // One-click demo: load the bundled clip and run the REAL pipeline on it, so a
+  // judge sees live pose + coaching without touching a file picker. The clip is
+  // served from /public (public/demo-climb.mp4).
+  const runDemoVideo = useCallback(async () => {
+    try {
+      setError(null)
+      const res = await fetch(`${import.meta.env.BASE_URL}demo-climb.mp4`)
+      if (!res.ok) throw new Error(`demo clip not found (${res.status})`)
+      const blob = await res.blob()
+      const f = new File([blob], 'demo-climb.mp4', { type: blob.type || 'video/mp4' })
+      await select(f)
+      setView('processing')
+      window.scrollTo({ top: 0 })
+    } catch (e) {
+      setError(
+        `Could not load the bundled demo clip. Add public/demo-climb.mp4, or use "Choose a video". (${e instanceof Error ? e.message : 'unknown'})`,
+      )
+    }
+  }, [select])
+
   const reset = useCallback(() => {
     clear()
     setAnalysis(null)
@@ -103,6 +123,7 @@ export default function App() {
             onClear={clear}
             onAnalyse={startAnalysis}
             onDemo={startDemo}
+            onRunDemoVideo={runDemoVideo}
           />
         )}
 

@@ -4,7 +4,6 @@ import { estimatePose } from './pose-estimation'
 import type { LiveFrame, PoseTrack } from './pose-estimation'
 import { analyseMovement } from './movement'
 import { buildAnalysis } from './build-analysis'
-import { sampleFrames } from './frames'
 import { detectHolds } from './holds'
 import type { HoldDetection } from './holds'
 
@@ -113,20 +112,17 @@ export async function analyseClimb(opts: {
     }
     onProgress({ stage: 3, fraction: 1 })
 
-    // Grab a few frames for visual grounding (optional; best-effort).
-    let frames: string[] = []
-    try {
-      frames = await sampleFrames(file, 4, signal)
-    } catch {
-      frames = []
-    }
+    // Visual-grounding frames are OFF: images are the biggest driver of model
+    // latency, and the pose/biomechanics observations already carry the signal.
+    // Text-only keeps the coaching call inside the serverless time budget.
+    const frames: string[] = []
 
     // A compact summary of detected holds so coaching can reference them.
     const holdSummary = detection
       ? {
           detected: true,
           count: detection.holds.length,
-          positions: detection.holds.slice(0, 30).map((h) => ({
+          positions: detection.holds.slice(0, 20).map((h) => ({
             id: h.id,
             x: Math.round((h.x / 360) * 100) / 100,
             y: Math.round((h.y / 540) * 100) / 100,
@@ -156,6 +152,11 @@ export async function analyseClimb(opts: {
       if (err.error === 'missing_api_key') {
         return fallback(
           'No Meta API key is configured yet, so this is sample coaching. Add META_API_KEY to enable real analysis.',
+        )
+      }
+      if (res.status === 504 || res.status === 502) {
+        return fallback(
+          'The coaching model took too long to respond (server timeout). Showing sample data — try a shorter clip.',
         )
       }
       const detail = err.detail ? ` Detail: ${String(err.detail).slice(0, 300)}` : ''

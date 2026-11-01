@@ -310,7 +310,9 @@ export default async function handler(req: Request, _context: Context): Promise<
         'Produce the coaching JSON for this attempt.',
     },
   ]
-  for (const dataUrl of (payload.frames ?? []).slice(0, 6)) {
+  // Images are the biggest driver of model latency; only send a couple and
+  // only if provided (the client omits them to stay within the time budget).
+  for (const dataUrl of (payload.frames ?? []).slice(0, 2)) {
     content.push({ type: 'image_url', image_url: { url: dataUrl } })
   }
 
@@ -329,9 +331,12 @@ export default async function handler(req: Request, _context: Context): Promise<
       { role: 'user', content },
     ],
     temperature: 0.4,
-    // Large: the full analysis (beta + feedback + training) is long; too small
-    // truncates the JSON mid-array and crashes parsing.
-    max_tokens: 8000,
+    // Keep reasoning light so the call returns within the function budget
+    // (ignored by providers that don't support it).
+    reasoning_effort: 'low',
+    // Bounded so generation completes inside the ~26s sync-function ceiling;
+    // the prompt keeps output concise so it isn't truncated.
+    max_tokens: 3000,
     ...(useSchema
       ? {
           response_format: {
