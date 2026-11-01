@@ -10,7 +10,6 @@
  * or guaranteed sequence.
  */
 
-import { extractFrameAt } from './frames'
 import { colorName } from './holds'
 import { estimateHoldType } from './holdTypes'
 import type { Analysis, BetaStep, Hold, LimbState } from '../types'
